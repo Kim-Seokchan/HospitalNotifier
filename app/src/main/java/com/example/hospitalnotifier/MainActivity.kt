@@ -11,6 +11,9 @@ import com.example.hospitalnotifier.databinding.ActivityMainBinding
 import com.example.hospitalnotifier.worker.ReservationWorker
 import java.util.concurrent.TimeUnit
 
+import androidx.work.OneTimeWorkRequestBuilder
+import java.util.UUID
+
 class MainActivity : AppCompatActivity() {
 
     // activity_main.xml의 UI 요소들을 제어하기 위한 변수
@@ -66,6 +69,43 @@ class MainActivity : AppCompatActivity() {
             workManager.cancelUniqueWork("HospitalReservationCheck")
             binding.statusTextView.text = "대기 중..."
             Toast.makeText(this, "예약 확인을 중지합니다.", Toast.LENGTH_SHORT).show()
+        }
+
+        // "결과 확인" 버튼을 눌렀을 때
+        binding.checkNowButton.setOnClickListener {
+            val userId = binding.userIdEditText.text.toString()
+            val userPw = binding.userPwEditText.text.toString()
+
+            if (userId.isEmpty() || userPw.isEmpty()) {
+                Toast.makeText(this, "병원 ID와 비밀번호를 입력해주세요.", Toast.LENGTH_SHORT).show()
+                return@setOnClickListener
+            }
+
+            binding.resultTextView.text = "확인 중..."
+
+            // Worker에게 전달할 데이터 꾸러미 만들기
+            val inputData = Data.Builder()
+                .putString("USER_ID", userId)
+                .putString("USER_PW", userPw)
+                .putBoolean("ONE_TIME_CHECK", true) // 일회성 확인임을 알리는 플래그
+                .build()
+
+            // 일회성 작업 요청 생성
+            val oneTimeWorkRequest = OneTimeWorkRequestBuilder<ReservationWorker>()
+                .setInputData(inputData)
+                .setId(UUID.randomUUID()) // 고유한 ID 생성
+                .build()
+
+            workManager.enqueue(oneTimeWorkRequest)
+
+            // 작업 상태 관찰
+            workManager.getWorkInfoByIdLiveData(oneTimeWorkRequest.id)
+                .observe(this) { workInfo ->
+                    if (workInfo != null && workInfo.state.isFinished) {
+                        val result = workInfo.outputData.getString("RESULT")
+                        binding.resultTextView.text = result ?: "결과를 가져오지 못했습니다."
+                    }
+                }
         }
     }
 }

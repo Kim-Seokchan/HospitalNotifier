@@ -70,4 +70,20 @@
         android:layout_marginTop="20dp"
         android:text="@string/waiting_status" />
 
+    <Button
+        android:id="@+id/checkNowButton"
+        android:layout_width="wrap_content"
+        android:layout_height="wrap_content"
+        android:layout_gravity="center_horizontal"
+        android:layout_marginTop="16dp"
+        android:text="결과 확인" />
+
+    <TextView
+        android:id="@+id/resultTextView"
+        android:layout_width="wrap_content"
+        android:layout_height="wrap_content"
+        android:layout_gravity="center_horizontal"
+        android:layout_marginTop="20dp"
+        android:text="결과 대기 중..." />
+
 </LinearLayout>
