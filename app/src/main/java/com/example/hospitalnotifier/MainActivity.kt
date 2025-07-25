@@ -57,7 +57,7 @@ class MainActivity : AppCompatActivity() {
                 reservationWorkRequest
             )
 
-            binding.statusTextView.text = "확인 작업이 시작되었습니다. ${interval}분마다 백그라운드에서 실행됩니다."
+            binding.statusTextView.text = getString(R.string.start_status, interval)
             Toast.makeText(this, "예약 확인을 시작합니다.", Toast.LENGTH_SHORT).show()
         }
 
