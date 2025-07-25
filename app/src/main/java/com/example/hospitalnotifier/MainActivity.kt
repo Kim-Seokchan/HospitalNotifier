@@ -34,6 +34,8 @@ class MainActivity : AppCompatActivity() {
                 return@setOnClickListener
             }
 
+            val interval = binding.intervalEditText.text.toString().toLongOrNull() ?: 15
+
             // Worker에게 전달할 데이터 꾸러미 만들기
             val inputData = Data.Builder()
                 .putString("USER_ID", userId)
@@ -44,7 +46,7 @@ class MainActivity : AppCompatActivity() {
 
             // 15분마다 반복되는 작업 요청 생성 (WorkManager의 최소 반복 간격은 15분)
             val reservationWorkRequest =
-                PeriodicWorkRequestBuilder<ReservationWorker>(15, TimeUnit.MINUTES)
+                PeriodicWorkRequestBuilder<ReservationWorker>(interval, TimeUnit.MINUTES)
                     .setInputData(inputData)
                     .build()
 
@@ -55,7 +57,7 @@ class MainActivity : AppCompatActivity() {
                 reservationWorkRequest
             )
 
-            binding.statusTextView.text = "확인 작업이 시작되었습니다. 15분마다 백그라운드에서 실행됩니다."
+            binding.statusTextView.text = "확인 작업이 시작되었습니다. ${interval}분마다 백그라운드에서 실행됩니다."
             Toast.makeText(this, "예약 확인을 시작합니다.", Toast.LENGTH_SHORT).show()
         }
 
