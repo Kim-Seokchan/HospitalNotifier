@@ -1,0 +1,63 @@
+<?xml version="1.0" encoding="utf-8"?>
+<LinearLayout xmlns:android="http://schemas.android.com/apk/res/android"
+    xmlns:tools="http://schemas.android.com/tools"
+    android:layout_width="match_parent"
+    android:layout_height="match_parent"
+    android:orientation="vertical"
+    android:padding="16dp"
+    tools:context=".MainActivity">
+
+    <EditText
+        android:id="@+id/userIdEditText"
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:hint="병원 아이디"
+        android:autofillHints="username"
+        android:inputType="text" />
+
+    <EditText
+        android:id="@+id/userPwEditText"
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:hint="병원 비밀번호"
+        android:inputType="textPassword"
+        android:autofillHints="password" />
+
+    <EditText
+        android:id="@+id/telegramTokenEditText"
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:hint="텔레그램 봇 토큰"
+        android:inputType="text" />
+
+    <EditText
+        android:id="@+id/telegramChatIdEditText"
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:hint="텔레그램 채팅 ID"
+        android:inputType="text" />
+
+    <Button
+        android:id="@+id/startButton"
+        android:layout_width="wrap_content"
+        android:layout_height="wrap_content"
+        android:layout_gravity="center_horizontal"
+        android:layout_marginTop="16dp"
+        android:text="예약 확인 시작" />
+
+    <Button
+        android:id="@+id/stopButton"
+        android:layout_width="wrap_content"
+        android:layout_height="wrap_content"
+        android:layout_gravity="center_horizontal"
+        android:text="중지" />
+
+    <TextView
+        android:id="@+id/statusTextView"
+        android:layout_width="wrap_content"
+        android:layout_height="wrap_content"
+        android:layout_gravity="center_horizontal"
+        android:layout_marginTop="20dp"
+        android:text="대기 중..." />
+
+</LinearLayout>
