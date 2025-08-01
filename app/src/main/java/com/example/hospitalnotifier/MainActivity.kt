@@ -1,13 +1,16 @@
 package com.example.hospitalnotifier
 
+import android.annotation.SuppressLint
 import android.os.Bundle
-import android.view.View
+import android.util.Log
+import android.webkit.CookieManager
+import android.webkit.WebView
+import android.webkit.WebViewClient
 import android.widget.ArrayAdapter
 import android.widget.Toast
 import androidx.appcompat.app.AppCompatActivity
 import androidx.lifecycle.Observer
 import androidx.work.*
-import android.util.Log 
 import com.example.hospitalnotifier.databinding.ActivityMainBinding
 import java.util.concurrent.TimeUnit
 
@@ -15,9 +18,11 @@ class MainActivity : AppCompatActivity() {
 
     private lateinit var binding: ActivityMainBinding
     private val workManager by lazy { WorkManager.getInstance(applicationContext) }
+    private var isLoginProcessing = false
 
     companion object {
         const val WORK_TAG = "hospitalReservationCheck"
+        private const val TAG = "MainActivity"
     }
 
     override fun onCreate(savedInstanceState: Bundle?) {
@@ -28,6 +33,7 @@ class MainActivity : AppCompatActivity() {
         setupSpinner()
         setupClickListeners()
         observeWork()
+        setupWebView()
     }
 
     private fun setupSpinner() {
@@ -38,37 +44,109 @@ class MainActivity : AppCompatActivity() {
     }
 
     private fun setupClickListeners() {
-        binding.buttonStart.setOnClickListener { startWork() }
+        binding.buttonStart.setOnClickListener { startLoginProcess() }
         binding.buttonStop.setOnClickListener { stopWork() }
     }
 
-    private fun startWork() {
+    @SuppressLint("SetJavaScriptEnabled")
+    private fun setupWebView() {
+        binding.webView.settings.javaScriptEnabled = true
+        binding.webView.webViewClient = object : WebViewClient() {
+
+            override fun onPageFinished(view: WebView?, url: String?) {
+                super.onPageFinished(view, url)
+                if (view == null || url == null) return
+
+                Log.d(TAG, "onPageFinished: $url")
+                appendLog("WebView 페이지 로드 완료: $url")
+
+                if (!isLoginProcessing) return
+
+                // 1. 로그인 페이지가 로드되면, ID/PW 입력 및 로그인 시도
+                if (url.contains("login.do")) {
+                    val id = binding.editTextId.text.toString()
+                    val password = binding.editTextPassword.text.toString()
+                    val script = "javascript:document.getElementById('id').value = '$id';" +
+                                 "document.getElementById('pass').value = '$password';" +
+                                 "document.getElementById('loginBtn').click();"
+                    appendLog("로그인 스크립트 실행 시도")
+                    view.evaluateJavascript(script, null)
+                }
+
+                // 2. 페이지 내용 분석을 통해 로그인 성공/실패 판단
+                view.evaluateJavascript("(function() { return document.getElementsByTagName('html')[0].innerHTML; })();") {
+                    html ->
+                    val pageContent = html.replace("\\u003C", "<") // 유니코드 이스케이프 처리
+
+                    // 로그인 성공 조건: 페이지에 '로그아웃' 텍스트가 보임
+                    if (pageContent.contains("로그아웃")) {
+                        isLoginProcessing = false
+                        appendLog("로그인 성공! (로그아웃 버튼 확인)")
+                        val cookies = CookieManager.getInstance().getCookie(url)
+                        if (cookies != null) {
+                            saveLoginData(cookies)
+                            startWork()
+                        } else {
+                            appendLog("오류: 쿠키를 가져오지 못했습니다.")
+                            Toast.makeText(this@MainActivity, "쿠키 가져오기 실패", Toast.LENGTH_SHORT).show()
+                        }
+                    }
+                    // 로그인 실패 조건: 특정 실패 메시지가 보임
+                    else if (pageContent.contains("입력하신 정보와 일치하는 정보가 없습니다") || pageContent.contains("아이디 또는 비밀번호를 다시 확인하세요")) {
+                        isLoginProcessing = false
+                        appendLog("로그인 실패: 아이디 또는 비밀번호가 올바르지 않습니다.")
+                        Toast.makeText(this@MainActivity, "로그인 실패: 정보를 확인해주세요.", Toast.LENGTH_LONG).show()
+                    }
+                    // 그 외: 아직 로그인 처리 중이거나 다른 페이지일 수 있음
+                    else {
+                        appendLog("페이지 내용 확인 중...")
+                    }
+                }
+            }
+        }
+    }
+
+    private fun startLoginProcess() {
+        if (isLoginProcessing) {
+            Toast.makeText(this, "이미 로그인이 진행 중입니다.", Toast.LENGTH_SHORT).show()
+            return
+        }
+
         val id = binding.editTextId.text.toString()
         val password = binding.editTextPassword.text.toString()
+
+        if (id.isBlank() || password.isBlank()) {
+            Toast.makeText(this, "ID와 비밀번호를 입력해주세요.", Toast.LENGTH_SHORT).show()
+            return
+        }
+
+        isLoginProcessing = true
+        appendLog("로그인 시도 중... (WebView 로딩 시작)")
+        binding.webView.loadUrl("https://www.snuh.org/login.do")
+    }
+
+    private fun saveLoginData(cookies: String) {
         val targetMonths = binding.editTextTargetMonths.text.toString()
         val interval = binding.spinnerInterval.selectedItem as Float
         val telegramToken = binding.editTextTelegramToken.text.toString()
         val telegramChatId = binding.editTextTelegramChatId.text.toString()
 
-        if (id.isBlank() || password.isBlank() || targetMonths.isBlank()) {
-            Toast.makeText(this, "ID, 비밀번호, 조회 월은 필수입니다.", Toast.LENGTH_SHORT).show()
-            return
-        }
-
-        // Save user input to SharedPreferences
         val sharedPref = getSharedPreferences("settings", MODE_PRIVATE)
         with(sharedPref.edit()) {
-            putString("id", id)
-            putString("password", password)
+            putString("sessionCookie", cookies)
             putString("targetMonths", targetMonths)
             putFloat("interval", interval)
             putString("telegramToken", telegramToken)
             putString("telegramChatId", telegramChatId)
             apply()
         }
+        appendLog("세션 쿠키를 저장했습니다.")
+    }
 
+    private fun startWork() {
+        val interval = binding.spinnerInterval.selectedItem as Float
         val workRequest = PeriodicWorkRequestBuilder<ReservationWorker>(
-            interval.toLong(), TimeUnit.MINUTES
+            (interval * 60).toLong(), TimeUnit.SECONDS // 분을 초로 변환
         )
             .addTag(WORK_TAG)
             .build()
@@ -79,16 +157,14 @@ class MainActivity : AppCompatActivity() {
             workRequest
         )
 
-        Toast.makeText(this, "예약 조회를 시작합니다.", Toast.LENGTH_SHORT).show()
-        val logMessage = "\n[${java.util.Date()}] 예약 조회를 시작합니다."
-        binding.textViewLog.append(logMessage)
+        Toast.makeText(this, "로그인 성공. 예약 조회를 시작합니다.", Toast.LENGTH_SHORT).show()
+        appendLog("백그라운드 예약 조회를 시작합니다.")
     }
 
     private fun stopWork() {
         workManager.cancelAllWorkByTag(WORK_TAG)
         Toast.makeText(this, "예약 조회를 중지합니다.", Toast.LENGTH_SHORT).show()
-        val logMessage = "\n[${java.util.Date()}] 예약 조회를 중지합니다."
-        binding.textViewLog.append(logMessage)
+        appendLog("예약 조회를 중지합니다.")
     }
 
     private fun observeWork() {
@@ -98,28 +174,22 @@ class MainActivity : AppCompatActivity() {
             }
             val workInfo = workInfos[0]
 
-            when (workInfo.state) {
-                WorkInfo.State.SUCCEEDED -> {
-                    val successMessage = workInfo.outputData.getString("message") ?: "작업 성공."
-                    val logMessage = "\n[${java.util.Date()}] $successMessage"
-                    binding.textViewLog.append(logMessage)
-                }
-                WorkInfo.State.FAILED -> {
-                    val errorMessage = workInfo.outputData.getString("error") ?: "알 수 없는 오류"
-                    val logMessage = "\n[${java.util.Date()}] 작업 실패: $errorMessage"
-                    binding.textViewLog.append(logMessage)
-                    Toast.makeText(this, errorMessage, Toast.LENGTH_LONG).show()
-                    stopWork() // 실패 시 작업 중지
-                }
-                WorkInfo.State.CANCELLED -> {
-                    val logMessage = "\n[${java.util.Date()}] 작업 취소됨."
-                    binding.textViewLog.append(logMessage)
-                }
-                else -> {
-                    val logMessage = "\n[${java.util.Date()}] 작업 진행 중..."
-                    binding.textViewLog.append(logMessage)
-                }
+            val logMessage = workInfo.outputData.getString("log")
+            if (!logMessage.isNullOrBlank()) {
+                appendLog("작업자: $logMessage")
+            }
+
+            if (workInfo.state == WorkInfo.State.FAILED) {
+                val errorMessage = workInfo.outputData.getString("error") ?: "알 수 없는 오류"
+                appendLog("작업 실패: $errorMessage")
+                Toast.makeText(this, "작업 실패: $errorMessage", Toast.LENGTH_LONG).show()
             }
         })
+    }
+
+    private fun appendLog(message: String) {
+        val timestamp = java.text.SimpleDateFormat("HH:mm:ss", java.util.Locale.getDefault()).format(java.util.Date())
+        binding.textViewLog.append("\n[$timestamp] $message")
+        Log.d(TAG, message)
     }
 }

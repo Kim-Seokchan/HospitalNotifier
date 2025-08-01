@@ -1,8 +1,6 @@
 package com.example.hospitalnotifier
 
-import com.franmontiel.persistentcookiejar.PersistentCookieJar
-import com.franmontiel.persistentcookiejar.cache.SetCookieCache
-import com.franmontiel.persistentcookiejar.persistence.SharedPrefsCookiePersistor
+import android.content.Context
 import okhttp3.Interceptor
 import okhttp3.OkHttpClient
 import okhttp3.logging.HttpLoggingInterceptor
@@ -14,42 +12,44 @@ object SnuhClient {
     private const val BASE_URL = "https://www.snuh.org"
     private const val USER_AGENT = "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/108.0.0.0 Safari/537.36"
 
-    // CookieJar for automatic cookie management
-    private val cookieJar by lazy {
-        PersistentCookieJar(SetCookieCache(), SharedPrefsCookiePersistor(App.instance.applicationContext))
-    }
-
     private val loggingInterceptor by lazy {
         HttpLoggingInterceptor().apply {
             level = HttpLoggingInterceptor.Level.BODY
         }
     }
 
-    // Interceptor to add User-Agent header to all requests
-    private val headerInterceptor = Interceptor { chain ->
-        val request = chain.request().newBuilder()
-            .header("User-Agent", USER_AGENT)
-            .build()
-        chain.proceed(request)
+    // Interceptor to add headers and cookies from SharedPreferences
+    private fun createHeaderInterceptor(context: Context): Interceptor {
+        return Interceptor { chain ->
+            val sharedPref = context.getSharedPreferences("settings", Context.MODE_PRIVATE)
+            val cookie = sharedPref.getString("sessionCookie", "") ?: ""
+
+            val request = chain.request().newBuilder()
+                .header("User-Agent", USER_AGENT)
+                .header("Cookie", cookie)
+                .header("Referer", "https://www.snuh.org/reservation/reservation.do")
+                .header("X-Requested-With", "XMLHttpRequest")
+                .build()
+            chain.proceed(request)
+        }
     }
 
-    private val okHttpClient by lazy {
-        OkHttpClient.Builder()
-            .cookieJar(cookieJar) // Add CookieJar
-            .addInterceptor(headerInterceptor) // Add User-Agent interceptor
+    private fun getOkHttpClient(context: Context): OkHttpClient {
+        return OkHttpClient.Builder()
+            .addInterceptor(createHeaderInterceptor(context))
             .addInterceptor(loggingInterceptor)
             .build()
     }
 
-    private val retrofit by lazy {
-        Retrofit.Builder()
+    private fun getRetrofit(context: Context): Retrofit {
+        return Retrofit.Builder()
             .baseUrl(BASE_URL)
-            .client(okHttpClient)
-            .addConverterFactory(ScalarsConverterFactory.create()) // HTML/JSON을 String으로 받기 위함
+            .client(getOkHttpClient(context))
+            .addConverterFactory(ScalarsConverterFactory.create())
             .build()
     }
 
-    val api: SnuhApi by lazy {
-        retrofit.create(SnuhApi::class.java)
+    fun getApi(context: Context): SnuhApi {
+        return getRetrofit(context).create(SnuhApi::class.java)
     }
 }
