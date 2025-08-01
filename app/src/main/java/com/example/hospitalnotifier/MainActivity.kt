@@ -94,7 +94,7 @@ class MainActivity : AppCompatActivity() {
 
                     if (pageContent.contains("로그아웃")) {
                         isLoginProcessing = false
-                        binding.webView.visibility = View.GONE // Hide WebView
+                        // binding.webView.visibility = View.GONE // Hide WebView for debugging
                         appendLog("로그인 성공! (로그아웃 버튼 확인)")
                         val cookies = CookieManager.getInstance().getCookie(url)
                         if (cookies != null) {
