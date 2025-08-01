@@ -144,7 +144,8 @@
             android:background="#f0f0f0"
             android:padding="8dp"
             android:scrollbars="vertical"
-            android:textAppearance="@style/TextAppearance.AppCompat.Body1" />
+            android:textAppearance="@style/TextAppearance.AppCompat.Body1"
+            android:textIsSelectable="true" />
     </ScrollView>
 
 </androidx.constraintlayout.widget.ConstraintLayout>

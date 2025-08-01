@@ -144,11 +144,10 @@ class MainActivity : AppCompatActivity() {
     }
 
     private fun startWork() {
-        val interval = binding.spinnerInterval.selectedItem as Float
-        val workRequest = PeriodicWorkRequestBuilder<ReservationWorker>(
-            (interval * 60).toLong(), TimeUnit.SECONDS
-        ).addTag(WORK_TAG).build()
-        workManager.enqueueUniquePeriodicWork(WORK_TAG, ExistingPeriodicWorkPolicy.UPDATE, workRequest)
+        val workRequest = OneTimeWorkRequestBuilder<ReservationWorker>()
+            .addTag(WORK_TAG)
+            .build()
+        workManager.enqueueUniqueWork(WORK_TAG, ExistingWorkPolicy.REPLACE, workRequest)
         Toast.makeText(this, "로그인 성공. 예약 조회를 시작합니다.", Toast.LENGTH_SHORT).show()
         appendLog("백그라운드 예약 조회를 시작합니다.")
     }
@@ -162,15 +161,26 @@ class MainActivity : AppCompatActivity() {
     private fun observeWork() {
         workManager.getWorkInfosByTagLiveData(WORK_TAG).observe(this, Observer { workInfos ->
             if (workInfos.isNullOrEmpty()) return@Observer
+
             val workInfo = workInfos[0]
-            val logMessage = workInfo.outputData.getString("log")
-            if (!logMessage.isNullOrBlank()) {
-                appendLog("작업자: $logMessage")
+
+            // Observe real-time progress
+            val progressLog = workInfo.progress.getString("log_progress")
+            if (!progressLog.isNullOrBlank()) {
+                appendLog("작업자 진행: $progressLog")
             }
-            if (workInfo.state == WorkInfo.State.FAILED) {
-                val errorMessage = workInfo.outputData.getString("error") ?: "알 수 없는 오류"
-                appendLog("작업 실패: $errorMessage")
-                Toast.makeText(this, "작업 실패: $errorMessage", Toast.LENGTH_LONG).show()
+
+            // Observe final output
+            if (workInfo.state.isFinished) {
+                val finalLog = workInfo.outputData.getString("log")
+                if (!finalLog.isNullOrBlank()) {
+                    appendLog("작업자 완료: $finalLog")
+                }
+                if (workInfo.state == WorkInfo.State.FAILED) {
+                    val errorMessage = workInfo.outputData.getString("error") ?: "알 수 없는 오류"
+                    appendLog("작업 실패: $errorMessage")
+                    Toast.makeText(this, "작업 실패: $errorMessage", Toast.LENGTH_LONG).show()
+                }
             }
         })
     }

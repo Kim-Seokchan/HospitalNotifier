@@ -5,8 +5,8 @@ import android.util.Log
 import androidx.work.CoroutineWorker
 import androidx.work.WorkerParameters
 import androidx.work.workDataOf
+import com.example.hospitalnotifier.network.ApiClient
 import kotlinx.coroutines.delay
-import org.json.JSONObject
 
 class ReservationWorker(private val appContext: Context, workerParams: WorkerParameters) :
     CoroutineWorker(appContext, workerParams) {
@@ -40,7 +40,7 @@ class ReservationWorker(private val appContext: Context, workerParams: WorkerPar
         try {
             val months = targetMonths.split(",").map { it.trim() }.filter { it.isNotEmpty() }
             val allFoundDates = mutableListOf<String>()
-            val snuhApi = SnuhClient.getApi(appContext)
+            val snuhApi = ApiClient.getApiService(appContext)
 
             for (month in months) {
                 val yearMonth = month.split("-")
@@ -52,37 +52,32 @@ class ReservationWorker(private val appContext: Context, workerParams: WorkerPar
 
                 log.add("$year-$monthStr 월 예약 조회 중...")
 
-                val response = snuhApi.checkReservation(
+                val response = snuhApi.checkAvailability(
+                    sessionCookie = sessionCookie,
                     deptCd = "OSHS", // TODO: Make this configurable
                     drCd = "05081",   // TODO: Make this configurable
                     nextDt = nextDt
                 )
 
                 if (response.isSuccessful && response.body() != null) {
-                    val responseBody = response.body()!!
-                    val json = JSONObject(responseBody)
-
-                    if (json.has("scheduleList")) {
-                        val scheduleList = json.getJSONArray("scheduleList")
-                        if (scheduleList.length() > 0) {
-                            for (i in 0 until scheduleList.length()) {
-                                val schedule = scheduleList.getJSONObject(i)
-                                val meddate = schedule.getString("meddate") // YYYYMMDD
-                                val formattedDate = "${meddate.substring(0, 4)}년 ${meddate.substring(4, 6)}월 ${meddate.substring(6, 8)}일"
-                                allFoundDates.add(formattedDate)
-                            }
-                            log.add("[$month] 예약 가능한 날짜 발견!")
-                        } else {
-                            log.add("[$month] 예약 가능한 날짜 없음.")
+                    val scheduleResponse = response.body()!!
+                    if (!scheduleResponse.scheduleList.isNullOrEmpty()) {
+                        for (schedule in scheduleResponse.scheduleList) {
+                            val meddate = schedule.meddate ?: continue
+                            val formattedDate = "${meddate.substring(0, 4)}년 ${meddate.substring(4, 6)}월 ${meddate.substring(6, 8)}일"
+                            allFoundDates.add(formattedDate)
                         }
-                    } else if (responseBody.contains("로그인 후 이용해 주시기 바랍니다")) {
-                        log.add("세션이 만료되었습니다. 재로그인이 필요합니다.")
-                        return Result.failure(workDataOf("error" to "세션 만료. 재로그인 해주세요.", "log" to log.joinToString("\n")))
+                        log.add("[$month] 예약 가능한 날짜 발견!")
+                    } else {
+                        log.add("[$month] 예약 가능한 날짜 없음.")
                     }
+                } else if (response.code() == 401 || response.code() == 403) { // Unauthorized or Forbidden
+                    log.add("세션이 만료되었습니다. 재로그인이 필요합니다.")
+                    return Result.failure(workDataOf("error" to "세션 만료. 재로그인 해주세요.", "log" to log.joinToString("\n")))
+                } else {
+                    log.add("[$month] 예약 조회 실패: ${response.code()} - ${response.errorBody()?.string()}")
                 }
- else {
-                    log.add("[$month] 예약 조회 실패: ${response.code()}")
-                }
+
                 delay(1000) // Rate limit
             }
 
