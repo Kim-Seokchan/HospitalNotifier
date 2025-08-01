@@ -7,24 +7,24 @@
     android:padding="16dp"
     tools:context=".MainActivity">
 
-    <!-- WebView for debugging, made visible -->
+    <!-- WebView is now gone from the main layout, but used programmatically -->
     <WebView
         android:id="@+id/webView"
         android:layout_width="0dp"
-        android:layout_height="200dp" 
-        android:visibility="visible"
+        android:layout_height="0dp"
+        android:visibility="gone"
         app:layout_constraintTop_toTopOf="parent"
         app:layout_constraintStart_toStartOf="parent"
-        app:layout_constraintEnd_toEndOf="parent" />
+        app:layout_constraintEnd_toEndOf="parent"
+        app:layout_constraintBottom_toBottomOf="parent" />
 
     <EditText
         android:id="@+id/editTextId"
         android:layout_width="0dp"
         android:layout_height="wrap_content"
-        android:layout_marginTop="8dp"
         android:hint="병원 ID"
         android:inputType="text"
-        app:layout_constraintTop_toBottomOf="@id/webView"
+        app:layout_constraintTop_toTopOf="parent"
         app:layout_constraintStart_toStartOf="parent"
         app:layout_constraintEnd_toEndOf="parent" />
 

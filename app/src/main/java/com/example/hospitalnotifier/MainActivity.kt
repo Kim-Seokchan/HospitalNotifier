@@ -4,6 +4,7 @@ import android.annotation.SuppressLint
 import android.content.DialogInterface
 import android.os.Bundle
 import android.util.Log
+import android.view.View
 import android.webkit.CookieManager
 import android.webkit.JsResult
 import android.webkit.WebChromeClient
@@ -56,16 +57,16 @@ class MainActivity : AppCompatActivity() {
     private fun setupWebView() {
         binding.webView.settings.javaScriptEnabled = true
 
-        // JavaScript alert() 등을 처리하기 위한 WebChromeClient 설정
         binding.webView.webChromeClient = object : WebChromeClient() {
             override fun onJsAlert(view: WebView?, url: String?, message: String?, result: JsResult?): Boolean {
-                if (message != null) {
+                if (message != null && isLoginProcessing) {
                     isLoginProcessing = false
-                    val logMessage = "로그인 실패 (알림): $message"
+                    binding.webView.visibility = View.GONE // Hide WebView
+                    val logMessage = "로그인 실패: $message"
                     appendLog(logMessage)
                     Toast.makeText(this@MainActivity, logMessage, Toast.LENGTH_LONG).show()
                 }
-                result?.confirm() // alert 창을 닫아줌
+                result?.confirm()
                 return true
             }
         }
@@ -78,7 +79,6 @@ class MainActivity : AppCompatActivity() {
                 Log.d(TAG, "onPageFinished: $url")
                 appendLog("WebView 페이지 로드 완료: $url")
 
-                // 1. 로그인 페이지가 로드되면, ID/PW 입력 및 로그인 시도
                 if (url.contains("login.do")) {
                     val id = binding.editTextId.text.toString()
                     val password = binding.editTextPassword.text.toString()
@@ -89,13 +89,13 @@ class MainActivity : AppCompatActivity() {
                     view.evaluateJavascript(script, null)
                 }
 
-                // 2. 페이지 내용 분석을 통해 로그인 성공/실패 판단
                 view.evaluateJavascript("(function() { return document.getElementsByTagName('html')[0].innerHTML; })();") {
                     html ->
                     val pageContent = html.replace("\\u003C", "<")
 
                     if (pageContent.contains("로그아웃")) {
                         isLoginProcessing = false
+                        binding.webView.visibility = View.GONE // Hide WebView
                         appendLog("로그인 성공! (로그아웃 버튼 확인)")
                         val cookies = CookieManager.getInstance().getCookie(url)
                         if (cookies != null) {
@@ -105,14 +105,6 @@ class MainActivity : AppCompatActivity() {
                             appendLog("오류: 쿠키를 가져오지 못했습니다.")
                             Toast.makeText(this@MainActivity, "쿠키 가져오기 실패", Toast.LENGTH_SHORT).show()
                         }
-                    } else if (pageContent.contains("입력하신 정보와 일치하는 정보가 없습니다") || pageContent.contains("아이디 또는 비밀번호를 다시 확인하세요")) {
-                        isLoginProcessing = false
-                        appendLog("로그인 실패: 아이디 또는 비밀번호가 올바르지 않습니다.")
-                        Toast.makeText(this@MainActivity, "로그인 실패: 정보를 확인해주세요.", Toast.LENGTH_LONG).show()
-                    } else {
-                        appendLog("페이지 내용 확인 중...")
-                        // 디버깅을 위해 예상치 못한 페이지의 HTML 내용을 Logcat에 출력
-                        Log.d(TAG, "UNEXPECTED PAGE CONTENT:\n$pageContent")
                     }
                 }
             }
@@ -131,6 +123,7 @@ class MainActivity : AppCompatActivity() {
             return
         }
         isLoginProcessing = true
+        binding.webView.visibility = View.VISIBLE // Show WebView for login process
         appendLog("로그인 시도 중... (WebView 로딩 시작)")
         binding.webView.loadUrl("https://www.snuh.org/login.do")
     }
