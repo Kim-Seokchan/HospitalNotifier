@@ -57,9 +57,6 @@ dependencies {
     // 4. Persistent Cookie Jar: 쿠키 관리를 위함
     implementation("com.github.franmontiel:PersistentCookieJar:v1.0.1")
 
-    // 4. Persistent Cookie Jar: 쿠키 관리를 위함
-    implementation("com.github.franmontiel:PersistentCookieJar:v1.0.1")
-
     implementation(libs.androidx.core.ktx)
     implementation(libs.androidx.appcompat)
     implementation(libs.material)
