@@ -1,12 +1,16 @@
 <resources>
-    <string name="app_name">HospitalNotifier</string>
-    <string name="hospital_id_hint">병원 아이디</string>
-    <string name="hospital_password_hint">병원 비밀번호</string>
-    <string name="telegram_token_hint">텔레그램 봇 토큰</string>
-    <string name="telegram_chat_id_hint">텔레그램 채팅 ID</string>
-    <string name="start_reservation_check">예약 확인 시작</string>
-    <string name="interval_hint">확인 간격(분)</string>
-    <string name="stop_check">중지</string>
-    <string name="waiting_status">대기 중…</string>
-    <string name="start_status">확인 작업이 시작되었습니다. %1$d분마다 백그라운드에서 실행됩니다.</string>
+    <string name="app_name">Hospital Notifier</string>
+
+    <!-- MainActivity -->
+    <string name="hospital_id_hint">병원 ID</string>
+    <string name="password_hint">비밀번호</string>
+    <string name="target_month_label">조회할 년-월 (예: 2025-12, 2026-01)</string>
+    <string name="target_month_hint">2025-12, 2026-01, 2026-03</string>
+    <string name="interval_label">조회 주기 (분)</string>
+    <string name="telegram_token_hint">텔레그램 봇 토큰 (선택 사항)</string>
+    <string name="telegram_chat_id_hint">텔레그램 챗 ID (선택 사항)</string>
+    <string name="start_button_text">예약 조회 시작</string>
+    <string name="stop_button_text">중지</string>
+    <string name="log_placeholder">로그가 여기에 표시됩니다.</string>
+
 </resources>
