@@ -1,111 +1,125 @@
 package com.example.hospitalnotifier
 
 import android.os.Bundle
+import android.view.View
+import android.widget.ArrayAdapter
 import android.widget.Toast
 import androidx.appcompat.app.AppCompatActivity
-import androidx.work.Data
-import androidx.work.ExistingPeriodicWorkPolicy
-import androidx.work.PeriodicWorkRequestBuilder
-import androidx.work.WorkManager
+import androidx.lifecycle.Observer
+import androidx.work.*
+import android.util.Log 
 import com.example.hospitalnotifier.databinding.ActivityMainBinding
-import com.example.hospitalnotifier.worker.ReservationWorker
 import java.util.concurrent.TimeUnit
-
-import androidx.work.OneTimeWorkRequestBuilder
-import java.util.UUID
 
 class MainActivity : AppCompatActivity() {
 
-    // activity_main.xml의 UI 요소들을 제어하기 위한 변수
     private lateinit var binding: ActivityMainBinding
     private val workManager by lazy { WorkManager.getInstance(applicationContext) }
+
+    companion object {
+        const val WORK_TAG = "hospitalReservationCheck"
+    }
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         binding = ActivityMainBinding.inflate(layoutInflater)
         setContentView(binding.root)
 
-        // "예약 확인 시작" 버튼을 눌렀을 때
-        binding.startButton.setOnClickListener {
-            val userId = binding.userIdEditText.text.toString()
-            val userPw = binding.userPwEditText.text.toString()
-            val telegramToken = binding.telegramTokenEditText.text.toString()
-            val telegramChatId = binding.telegramChatIdEditText.text.toString()
+        setupSpinner()
+        setupClickListeners()
+        observeWork()
+    }
 
-            if (userId.isEmpty() || userPw.isEmpty() || telegramToken.isEmpty() || telegramChatId.isEmpty()) {
-                Toast.makeText(this, "모든 정보를 입력해주세요.", Toast.LENGTH_SHORT).show()
-                return@setOnClickListener
-            }
+    private fun setupSpinner() {
+        val intervals = arrayOf(0.5f, 1f, 5f, 10f, 15f)
+        val adapter = ArrayAdapter(this, android.R.layout.simple_spinner_item, intervals)
+        adapter.setDropDownViewResource(android.R.layout.simple_spinner_dropdown_item)
+        binding.spinnerInterval.adapter = adapter
+    }
 
-            val interval = binding.intervalEditText.text.toString().toLongOrNull() ?: 15
+    private fun setupClickListeners() {
+        binding.buttonStart.setOnClickListener { startWork() }
+        binding.buttonStop.setOnClickListener { stopWork() }
+    }
 
-            // Worker에게 전달할 데이터 꾸러미 만들기
-            val inputData = Data.Builder()
-                .putString("USER_ID", userId)
-                .putString("USER_PW", userPw)
-                .putString("TELEGRAM_TOKEN", telegramToken)
-                .putString("TELEGRAM_CHAT_ID", telegramChatId)
-                .build()
+    private fun startWork() {
+        val id = binding.editTextId.text.toString()
+        val password = binding.editTextPassword.text.toString()
+        val targetMonths = binding.editTextTargetMonths.text.toString()
+        val interval = binding.spinnerInterval.selectedItem as Float
+        val telegramToken = binding.editTextTelegramToken.text.toString()
+        val telegramChatId = binding.editTextTelegramChatId.text.toString()
 
-            // 15분마다 반복되는 작업 요청 생성 (WorkManager의 최소 반복 간격은 15분)
-            val reservationWorkRequest =
-                PeriodicWorkRequestBuilder<ReservationWorker>(interval, TimeUnit.MINUTES)
-                    .setInputData(inputData)
-                    .build()
-
-            // 중복 실행을 막기 위해 고유한 이름으로 작업을 큐에 추가
-            workManager.enqueueUniquePeriodicWork(
-                "HospitalReservationCheck",
-                ExistingPeriodicWorkPolicy.UPDATE, // 이미 작업이 있다면 새 것으로 교체
-                reservationWorkRequest
-            )
-
-            binding.statusTextView.text = getString(R.string.start_status, interval)
-            Toast.makeText(this, "예약 확인을 시작합니다.", Toast.LENGTH_SHORT).show()
+        if (id.isBlank() || password.isBlank() || targetMonths.isBlank()) {
+            Toast.makeText(this, "ID, 비밀번호, 조회 월은 필수입니다.", Toast.LENGTH_SHORT).show()
+            return
         }
 
-        // "중지" 버튼을 눌렀을 때
-        binding.stopButton.setOnClickListener {
-            workManager.cancelUniqueWork("HospitalReservationCheck")
-            binding.statusTextView.text = "대기 중..."
-            Toast.makeText(this, "예약 확인을 중지합니다.", Toast.LENGTH_SHORT).show()
+        // Save user input to SharedPreferences
+        val sharedPref = getSharedPreferences("settings", MODE_PRIVATE)
+        with(sharedPref.edit()) {
+            putString("id", id)
+            putString("password", password)
+            putString("targetMonths", targetMonths)
+            putFloat("interval", interval)
+            putString("telegramToken", telegramToken)
+            putString("telegramChatId", telegramChatId)
+            apply()
         }
 
-        // "결과 확인" 버튼을 눌렀을 때
-        binding.checkNowButton.setOnClickListener {
-            val userId = binding.userIdEditText.text.toString()
-            val userPw = binding.userPwEditText.text.toString()
+        val workRequest = PeriodicWorkRequestBuilder<ReservationWorker>(
+            interval.toLong(), TimeUnit.MINUTES
+        )
+            .addTag(WORK_TAG)
+            .build()
 
-            if (userId.isEmpty() || userPw.isEmpty()) {
-                Toast.makeText(this, "병원 ID와 비밀번호를 입력해주세요.", Toast.LENGTH_SHORT).show()
-                return@setOnClickListener
+        workManager.enqueueUniquePeriodicWork(
+            WORK_TAG,
+            ExistingPeriodicWorkPolicy.REPLACE,
+            workRequest
+        )
+
+        Toast.makeText(this, "예약 조회를 시작합니다.", Toast.LENGTH_SHORT).show()
+        val logMessage = "\n[${java.util.Date()}] 예약 조회를 시작합니다."
+        binding.textViewLog.append(logMessage)
+    }
+
+    private fun stopWork() {
+        workManager.cancelAllWorkByTag(WORK_TAG)
+        Toast.makeText(this, "예약 조회를 중지합니다.", Toast.LENGTH_SHORT).show()
+        val logMessage = "\n[${java.util.Date()}] 예약 조회를 중지합니다."
+        binding.textViewLog.append(logMessage)
+    }
+
+    private fun observeWork() {
+        workManager.getWorkInfosByTagLiveData(WORK_TAG).observe(this, Observer { workInfos ->
+            if (workInfos.isNullOrEmpty()) {
+                return@Observer
             }
+            val workInfo = workInfos[0]
 
-            binding.resultTextView.text = "확인 중..."
-
-            // Worker에게 전달할 데이터 꾸러미 만들기
-            val inputData = Data.Builder()
-                .putString("USER_ID", userId)
-                .putString("USER_PW", userPw)
-                .putBoolean("ONE_TIME_CHECK", true) // 일회성 확인임을 알리는 플래그
-                .build()
-
-            // 일회성 작업 요청 생성
-            val oneTimeWorkRequest = OneTimeWorkRequestBuilder<ReservationWorker>()
-                .setInputData(inputData)
-                .setId(UUID.randomUUID()) // 고유한 ID 생성
-                .build()
-
-            workManager.enqueue(oneTimeWorkRequest)
-
-            // 작업 상태 관찰
-            workManager.getWorkInfoByIdLiveData(oneTimeWorkRequest.id)
-                .observe(this) { workInfo ->
-                    if (workInfo != null && workInfo.state.isFinished) {
-                        val result = workInfo.outputData.getString("RESULT")
-                        binding.resultTextView.text = result ?: "결과를 가져오지 못했습니다."
-                    }
+            when (workInfo.state) {
+                WorkInfo.State.SUCCEEDED -> {
+                    val successMessage = workInfo.outputData.getString("message") ?: "작업 성공."
+                    val logMessage = "\n[${java.util.Date()}] $successMessage"
+                    binding.textViewLog.append(logMessage)
                 }
-        }
+                WorkInfo.State.FAILED -> {
+                    val errorMessage = workInfo.outputData.getString("error") ?: "알 수 없는 오류"
+                    val logMessage = "\n[${java.util.Date()}] 작업 실패: $errorMessage"
+                    binding.textViewLog.append(logMessage)
+                    Toast.makeText(this, errorMessage, Toast.LENGTH_LONG).show()
+                    stopWork() // 실패 시 작업 중지
+                }
+                WorkInfo.State.CANCELLED -> {
+                    val logMessage = "\n[${java.util.Date()}] 작업 취소됨."
+                    binding.textViewLog.append(logMessage)
+                }
+                else -> {
+                    val logMessage = "\n[${java.util.Date()}] 작업 진행 중..."
+                    binding.textViewLog.append(logMessage)
+                }
+            }
+        })
     }
 }

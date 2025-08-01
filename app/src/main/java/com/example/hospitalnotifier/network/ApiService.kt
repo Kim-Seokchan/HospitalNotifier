@@ -1,5 +1,6 @@
 package com.example.hospitalnotifier.network
 
+import okhttp3.ResponseBody
 import retrofit2.Response
 import retrofit2.http.Field
 import retrofit2.http.FormUrlEncoded
@@ -14,14 +15,6 @@ data class ScheduleItem(val meddate: String?)
 
 // 어떤 주소로 통신할지 정의하는 메뉴판
 interface ApiService {
-    // 로그인 요청 (실제 요청 경로는 병원 웹사이트에 맞게 수정 필요)
-    @FormUrlEncoded
-    @POST("/login.do")
-    suspend fun login(
-        @Field("id") userId: String,
-        @Field("pass") userPw: String
-    ): Response<Void>
-
     // 예약 가능일 확인 요청
     @GET("/reservation/medDateListAjax.do")
     suspend fun checkAvailability(
@@ -29,5 +22,5 @@ interface ApiService {
         @Query("dept_cd") deptCd: String,
         @Query("dr_cd") drCd: String,
         @Query("nextDt") nextDt: String
-    ): ScheduleResponse
+    ): Response<ScheduleResponse>
 }

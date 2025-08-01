@@ -48,10 +48,17 @@ dependencies {
     // 2. Retrofit & OkHttp: HTTP 통신 (Python의 requests 대체)
     implementation("com.squareup.retrofit2:retrofit:2.9.0")
     implementation("com.squareup.retrofit2:converter-gson:2.9.0") // JSON 파싱용
+    implementation("com.squareup.retrofit2:converter-scalars:2.9.0") // 일반 텍스트 파싱용
     implementation("com.squareup.okhttp3:logging-interceptor:4.11.0") // (선택) 통신 로그 확인용
 
     // 3. Kotlin Coroutines: 비동기 처리를 위함
     implementation("org.jetbrains.kotlinx:kotlinx-coroutines-android:1.7.3")
+
+    // 4. Persistent Cookie Jar: 쿠키 관리를 위함
+    implementation("com.github.franmontiel:PersistentCookieJar:v1.0.1")
+
+    // 4. Persistent Cookie Jar: 쿠키 관리를 위함
+    implementation("com.github.franmontiel:PersistentCookieJar:v1.0.1")
 
     implementation(libs.androidx.core.ktx)
     implementation(libs.androidx.appcompat)
