@@ -1,7 +1,6 @@
 package com.example.hospitalnotifier
 
 import android.annotation.SuppressLint
-import android.content.DialogInterface
 import android.os.Bundle
 import android.util.Log
 import android.view.View
@@ -12,8 +11,8 @@ import android.webkit.WebView
 import android.webkit.WebViewClient
 import android.widget.ArrayAdapter
 import android.widget.Toast
-import androidx.appcompat.app.AlertDialog
 import androidx.appcompat.app.AppCompatActivity
+import androidx.core.content.edit
 import androidx.lifecycle.Observer
 import androidx.work.*
 import com.example.hospitalnotifier.databinding.ActivityMainBinding
@@ -134,13 +133,12 @@ class MainActivity : AppCompatActivity() {
         val telegramToken = binding.editTextTelegramToken.text.toString()
         val telegramChatId = binding.editTextTelegramChatId.text.toString()
         val sharedPref = getSharedPreferences("settings", MODE_PRIVATE)
-        with(sharedPref.edit()) {
+        sharedPref.edit(commit = true) {
             putString("sessionCookie", cookies)
             putString("targetMonths", targetMonths)
             putFloat("interval", interval)
             putString("telegramToken", telegramToken)
             putString("telegramChatId", telegramChatId)
-            apply()
         }
         appendLog("세션 쿠키를 저장했습니다.")
     }
@@ -150,7 +148,7 @@ class MainActivity : AppCompatActivity() {
         val workRequest = PeriodicWorkRequestBuilder<ReservationWorker>(
             (interval * 60).toLong(), TimeUnit.SECONDS
         ).addTag(WORK_TAG).build()
-        workManager.enqueueUniquePeriodicWork(WORK_TAG, ExistingPeriodicWorkPolicy.REPLACE, workRequest)
+        workManager.enqueueUniquePeriodicWork(WORK_TAG, ExistingPeriodicWorkPolicy.UPDATE, workRequest)
         Toast.makeText(this, "로그인 성공. 예약 조회를 시작합니다.", Toast.LENGTH_SHORT).show()
         appendLog("백그라운드 예약 조회를 시작합니다.")
     }
