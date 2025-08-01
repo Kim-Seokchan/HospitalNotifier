@@ -181,5 +181,10 @@ class MainActivity : AppCompatActivity() {
         val timestamp = java.text.SimpleDateFormat("HH:mm:ss", java.util.Locale.getDefault()).format(java.util.Date())
         binding.textViewLog.append("\n[$timestamp] $message")
         Log.d(TAG, message)
+
+        // Automatically scroll to the bottom
+        binding.logScrollView.post {
+            binding.logScrollView.fullScroll(View.FOCUS_DOWN)
+        }
     }
 }
