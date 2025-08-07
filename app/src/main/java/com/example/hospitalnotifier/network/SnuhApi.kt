@@ -1,19 +1,16 @@
 package com.example.hospitalnotifier.network
 
-import com.example.hospitalnotifier.ScheduleResponse
-import retrofit2.Response
-import retrofit2.http.Field
-import retrofit2.http.FormUrlEncoded
+import retrofit2.http.GET
 import retrofit2.http.Header
-import retrofit2.http.POST
+import retrofit2.http.Query
 
 interface SnuhApi {
-    @FormUrlEncoded
-    @POST("reservation/reservation.do")
+    @GET("reservation/medDateListAjax.do") // GET으로 변경
     suspend fun checkAvailability(
         @Header("Cookie") sessionCookie: String,
-        @Field("deptCd") deptCd: String,
-        @Field("drCd") drCd: String,
-        @Field("nextDt") nextDt: String
-    ): Response<ScheduleResponse>
+        @Query("hsp_cd") hspCd: String,
+        @Query("dept_cd") deptCd: String,
+        @Query("dr_cd") drCd: String,
+        @Query("nextDt") nextDt: String
+    ): String
 }

@@ -1,10 +1,15 @@
 package com.example.hospitalnotifier
 
 import android.annotation.SuppressLint
+import android.content.BroadcastReceiver
+import android.content.Context
+import android.content.Intent
+import android.content.IntentFilter
 import android.os.Bundle
 import android.util.Log
 import android.view.View
 import android.webkit.CookieManager
+import android.webkit.JavascriptInterface
 import android.webkit.JsResult
 import android.webkit.WebChromeClient
 import android.webkit.WebView
@@ -14,8 +19,17 @@ import android.widget.Toast
 import androidx.appcompat.app.AppCompatActivity
 import androidx.core.content.edit
 import androidx.lifecycle.Observer
+import androidx.localbroadcastmanager.content.LocalBroadcastManager
 import androidx.work.*
 import com.example.hospitalnotifier.databinding.ActivityMainBinding
+import com.example.hospitalnotifier.network.TelegramClient
+import com.google.gson.Gson
+import com.google.gson.reflect.TypeToken
+import kotlinx.coroutines.CoroutineScope
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.launch
+import java.io.BufferedReader
+import java.io.InputStreamReader
 import java.util.concurrent.TimeUnit
 
 class MainActivity : AppCompatActivity() {
@@ -29,6 +43,14 @@ class MainActivity : AppCompatActivity() {
         private const val TAG = "MainActivity"
     }
 
+    private val reservationReceiver = object : BroadcastReceiver() {
+        override fun onReceive(context: Context?, intent: Intent?) {
+            if (intent?.action == ReservationWorker.ACTION_CHECK_RESERVATION) {
+                checkReservationInWebView()
+            }
+        }
+    }
+
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         binding = ActivityMainBinding.inflate(layoutInflater)
@@ -38,6 +60,16 @@ class MainActivity : AppCompatActivity() {
         setupClickListeners()
         observeWork()
         setupWebView()
+
+        LocalBroadcastManager.getInstance(this).registerReceiver(
+            reservationReceiver,
+            IntentFilter(ReservationWorker.ACTION_CHECK_RESERVATION)
+        )
+    }
+
+    override fun onDestroy() {
+        super.onDestroy()
+        LocalBroadcastManager.getInstance(this).unregisterReceiver(reservationReceiver)
     }
 
     private fun setupSpinner() {
@@ -52,9 +84,10 @@ class MainActivity : AppCompatActivity() {
         binding.buttonStop.setOnClickListener { stopWork() }
     }
 
-    @SuppressLint("SetJavaScriptEnabled")
+    @SuppressLint("SetJavaScriptEnabled", "AddJavascriptInterface")
     private fun setupWebView() {
         binding.webView.settings.javaScriptEnabled = true
+        binding.webView.addJavascriptInterface(WebAppInterface(this), "Android")
 
         binding.webView.webChromeClient = object : WebChromeClient() {
             override fun onJsAlert(view: WebView?, url: String?, message: String?, result: JsResult?): Boolean {
@@ -86,24 +119,17 @@ class MainActivity : AppCompatActivity() {
                                  "document.getElementById('loginBtn').click();"
                     appendLog("로그인 스크립트 실행 시도")
                     view.evaluateJavascript(script, null)
-                }
-
-                view.evaluateJavascript("(function() { return document.getElementsByTagName('html')[0].innerHTML; })();") {
-                    html ->
-                    val pageContent = html.replace("\\u003C", "<")
-
-                    if (pageContent.contains("로그아웃")) {
-                        isLoginProcessing = false
-                        // binding.webView.visibility = View.GONE // Hide WebView for debugging
-                        appendLog("로그인 성공! (로그아웃 버튼 확인)")
-                        val cookies = CookieManager.getInstance().getCookie(url)
-                        if (cookies != null) {
-                            saveLoginData(cookies)
-                            startWork()
-                        } else {
-                            appendLog("오류: 쿠키를 가져오지 못했습니다.")
-                            Toast.makeText(this@MainActivity, "쿠키 가져오기 실패", Toast.LENGTH_SHORT).show()
-                        }
+                } else if (url.contains("main.do")) { // 로그인 성공 후 메인 페이지로 이동 시
+                    isLoginProcessing = false
+                    binding.webView.visibility = View.GONE // Hide WebView
+                    appendLog("로그인 성공! (메인 페이지 이동 확인)")
+                    val cookies = CookieManager.getInstance().getCookie(url)
+                    if (cookies != null) {
+                        saveLoginData(cookies)
+                        startWork() // 주기적 작업 시작
+                    } else {
+                        appendLog("오류: 쿠키를 가져오지 못했습니다.")
+                        Toast.makeText(this@MainActivity, "쿠키 가져오기 실패", Toast.LENGTH_SHORT).show()
                     }
                 }
             }
@@ -144,10 +170,17 @@ class MainActivity : AppCompatActivity() {
     }
 
     private fun startWork() {
-        val workRequest = OneTimeWorkRequestBuilder<ReservationWorker>()
+        val intervalMinutes = binding.spinnerInterval.selectedItem as Float
+        val intervalMillis = (intervalMinutes * 60 * 1000).toLong()
+
+        val workRequest = PeriodicWorkRequestBuilder<ReservationWorker>(
+            intervalMillis, TimeUnit.MILLISECONDS
+        )
             .addTag(WORK_TAG)
             .build()
-        workManager.enqueueUniqueWork(WORK_TAG, ExistingWorkPolicy.REPLACE, workRequest)
+
+        workManager.enqueueUniquePeriodicWork(WORK_TAG, ExistingPeriodicWorkPolicy.REPLACE, workRequest)
+
         Toast.makeText(this, "로그인 성공. 예약 조회를 시작합니다.", Toast.LENGTH_SHORT).show()
         appendLog("백그라운드 예약 조회를 시작합니다.")
     }
@@ -164,25 +197,82 @@ class MainActivity : AppCompatActivity() {
 
             val workInfo = workInfos[0]
 
-            // Observe real-time progress
-            val progressLog = workInfo.progress.getString("log_progress")
-            if (!progressLog.isNullOrBlank()) {
-                appendLog("작업자 진행: $progressLog")
-            }
-
-            // Observe final output
             if (workInfo.state.isFinished) {
                 val finalLog = workInfo.outputData.getString("log")
                 if (!finalLog.isNullOrBlank()) {
-                    appendLog("작업자 완료: $finalLog")
-                }
-                if (workInfo.state == WorkInfo.State.FAILED) {
-                    val errorMessage = workInfo.outputData.getString("error") ?: "알 수 없는 오류"
-                    appendLog("작업 실패: $errorMessage")
-                    Toast.makeText(this, "작업 실패: $errorMessage", Toast.LENGTH_LONG).show()
+                    appendLog("작업자: $finalLog")
                 }
             }
         })
+    }
+
+    private fun checkReservationInWebView() {
+        val targetMonths = binding.editTextTargetMonths.text.toString()
+        if (targetMonths.isBlank()) {
+            appendLog("조회할 월 정보가 없습니다.")
+            return
+        }
+
+        try {
+            val scriptTemplate = assets.open("js/reservation_checker.js").bufferedReader().use { it.readText() }
+            val finalScript = scriptTemplate.replace("__TARGET_MONTHS__", targetMonths)
+            binding.webView.evaluateJavascript(finalScript, null)
+            appendLog("WebView에서 예약 확인을 시작합니다...")
+        } catch (e: Exception) {
+            appendLog("오류: 스크립트 파일을 읽을 수 없습니다. ${e.message}")
+        }
+    }
+
+    class WebAppInterface(private val context: Context) {
+        @JavascriptInterface
+        fun processResult(result: String) {
+            (context as MainActivity).runOnUiThread {
+                context.appendLog("WebView 예약 확인 결과: $result")
+                val gson = Gson()
+                val type = object : TypeToken<List<String>>() {}.type
+                val availableDates: List<String> = gson.fromJson(result, type)
+
+                if (availableDates.isNotEmpty()) {
+                    val distinctDates = availableDates.distinct().sorted()
+                    val message = """🎉 예약 가능한 날짜를 찾았습니다! 🎉
+
+${distinctDates.joinToString("\n") { "- $it" }}
+
+[지금 바로 예약하기](https://www.snuh.org/reservation/reservation.do)"""
+                    context.sendTelegramMessage(message)
+                }
+            }
+        }
+    }
+
+    fun sendTelegramMessage(text: String) {
+        val sharedPref = getSharedPreferences("settings", MODE_PRIVATE)
+        val telegramToken = sharedPref.getString("telegramToken", null)
+        val telegramChatId = sharedPref.getString("telegramChatId", null)
+
+        if (telegramToken.isNullOrBlank() || telegramChatId.isNullOrBlank()) {
+            appendLog("텔레그램 토큰 또는 챗 ID가 없어 메시지를 발송하지 않습니다.")
+            return
+        }
+
+        CoroutineScope(Dispatchers.IO).launch {
+            try {
+                val response = TelegramClient.api.sendMessage(
+                    token = "bot$telegramToken",
+                    chatId = telegramChatId,
+                    text = text,
+                    parseMode = "Markdown"
+                )
+                if (response.isSuccessful) {
+                    runOnUiThread { appendLog("텔레그램 메시지 발송 성공") }
+                } else {
+                    runOnUiThread { appendLog("텔레그램 메시지 발송 실패: ${response.code()} ${response.errorBody()?.string()}") }
+                }
+            } catch (e: Exception) {
+                runOnUiThread { appendLog("텔레그램 발송 중 오류 발생: ${e.message}") }
+                Log.e(TAG, "텔레그램 발송 중 오류 발생", e)
+            }
+        }
     }
 
     private fun appendLog(message: String) {
