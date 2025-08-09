@@ -1,11 +1,10 @@
 package com.example.hospitalnotifier
 
 import android.annotation.SuppressLint
-import android.content.BroadcastReceiver
 import android.content.Context
-import android.content.Intent
-import android.content.IntentFilter
 import android.os.Bundle
+import android.os.Handler
+import android.os.Looper
 import android.util.Log
 import android.view.View
 import android.webkit.CookieManager
@@ -18,37 +17,24 @@ import android.widget.ArrayAdapter
 import android.widget.Toast
 import androidx.appcompat.app.AppCompatActivity
 import androidx.core.content.edit
-import androidx.lifecycle.Observer
-import androidx.localbroadcastmanager.content.LocalBroadcastManager
-import androidx.work.*
 import com.example.hospitalnotifier.databinding.ActivityMainBinding
 import com.example.hospitalnotifier.network.TelegramClient
 import com.google.gson.Gson
-import com.google.gson.reflect.TypeToken
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
-import java.io.BufferedReader
-import java.io.InputStreamReader
-import java.util.concurrent.TimeUnit
+
 
 class MainActivity : AppCompatActivity() {
 
     private lateinit var binding: ActivityMainBinding
-    private val workManager by lazy { WorkManager.getInstance(applicationContext) }
     private var isLoginProcessing = false
+    private val handler = Handler(Looper.getMainLooper())
+    private var checkRunnable: Runnable? = null
+    private var intervalMillis: Long = 0L
 
     companion object {
-        const val WORK_TAG = "hospitalReservationCheck"
         private const val TAG = "MainActivity"
-    }
-
-    private val reservationReceiver = object : BroadcastReceiver() {
-        override fun onReceive(context: Context?, intent: Intent?) {
-            if (intent?.action == ReservationWorker.ACTION_CHECK_RESERVATION) {
-                checkReservationInWebView()
-            }
-        }
     }
 
     override fun onCreate(savedInstanceState: Bundle?) {
@@ -58,18 +44,12 @@ class MainActivity : AppCompatActivity() {
 
         setupSpinner()
         setupClickListeners()
-        observeWork()
         setupWebView()
-
-        LocalBroadcastManager.getInstance(this).registerReceiver(
-            reservationReceiver,
-            IntentFilter(ReservationWorker.ACTION_CHECK_RESERVATION)
-        )
     }
 
     override fun onDestroy() {
         super.onDestroy()
-        LocalBroadcastManager.getInstance(this).unregisterReceiver(reservationReceiver)
+        stopWork()
     }
 
     private fun setupSpinner() {
@@ -136,30 +116,51 @@ class MainActivity : AppCompatActivity() {
         }
     }
 
-    private fun startLoginProcess() {
+    fun startLoginProcess(auto: Boolean = false) {
         if (isLoginProcessing) {
             Toast.makeText(this, "이미 로그인이 진행 중입니다.", Toast.LENGTH_SHORT).show()
             return
         }
-        val id = binding.editTextId.text.toString()
-        val password = binding.editTextPassword.text.toString()
-        if (id.isBlank() || password.isBlank()) {
-            Toast.makeText(this, "ID와 비밀번호를 입력해주세요.", Toast.LENGTH_SHORT).show()
-            return
+
+        val id: String
+        val password: String
+
+        if (auto) {
+            val sharedPref = getSharedPreferences("settings", MODE_PRIVATE)
+            id = sharedPref.getString("id", "") ?: ""
+            password = sharedPref.getString("password", "") ?: ""
+            if (id.isBlank() || password.isBlank()) {
+                appendLog("자동 로그인 정보가 없어 재로그인에 실패했습니다.")
+                return
+            }
+            binding.editTextId.setText(id)
+            binding.editTextPassword.setText(password)
+        } else {
+            id = binding.editTextId.text.toString()
+            password = binding.editTextPassword.text.toString()
+            if (id.isBlank() || password.isBlank()) {
+                Toast.makeText(this, "ID와 비밀번호를 입력해주세요.", Toast.LENGTH_SHORT).show()
+                return
+            }
         }
+
         isLoginProcessing = true
-        binding.webView.visibility = View.VISIBLE // Show WebView for login process
-        appendLog("로그인 시도 중... (WebView 로딩 시작)")
+        binding.webView.visibility = if (auto) View.GONE else View.VISIBLE
+        appendLog(if (auto) "자동 재로그인 시도 중..." else "로그인 시도 중... (WebView 로딩 시작)")
         binding.webView.loadUrl("https://www.snuh.org/login.do")
     }
 
     private fun saveLoginData(cookies: String) {
+        val id = binding.editTextId.text.toString()
+        val password = binding.editTextPassword.text.toString()
         val targetMonths = binding.editTextTargetMonths.text.toString()
         val interval = binding.spinnerInterval.selectedItem as Float
         val telegramToken = binding.editTextTelegramToken.text.toString()
         val telegramChatId = binding.editTextTelegramChatId.text.toString()
         val sharedPref = getSharedPreferences("settings", MODE_PRIVATE)
         sharedPref.edit(commit = true) {
+            putString("id", id)
+            putString("password", password)
             putString("sessionCookie", cookies)
             putString("targetMonths", targetMonths)
             putFloat("interval", interval)
@@ -170,40 +171,23 @@ class MainActivity : AppCompatActivity() {
     }
 
     private fun startWork() {
-        val intervalMinutes = binding.spinnerInterval.selectedItem as Float
-        val intervalMillis = (intervalMinutes * 60 * 1000).toLong()
-
-        val workRequest = PeriodicWorkRequestBuilder<ReservationWorker>(
-            intervalMillis, TimeUnit.MILLISECONDS
-        )
-            .addTag(WORK_TAG)
-            .build()
-
-        workManager.enqueueUniquePeriodicWork(WORK_TAG, ExistingPeriodicWorkPolicy.REPLACE, workRequest)
-
+        intervalMillis = (binding.spinnerInterval.selectedItem as Float * 60 * 1000).toLong()
+        stopWork()
+        checkReservationInWebView() // 즉시 한 번 실행
+        checkRunnable = object : Runnable {
+            override fun run() {
+                checkReservationInWebView()
+                handler.postDelayed(this, intervalMillis)
+            }
+        }
+        handler.postDelayed(checkRunnable!!, intervalMillis)
         Toast.makeText(this, "로그인 성공. 예약 조회를 시작합니다.", Toast.LENGTH_SHORT).show()
-        appendLog("백그라운드 예약 조회를 시작합니다.")
+        appendLog("예약 조회를 시작합니다.")
     }
 
     private fun stopWork() {
-        workManager.cancelAllWorkByTag(WORK_TAG)
-        Toast.makeText(this, "예약 조회를 중지합니다.", Toast.LENGTH_SHORT).show()
-        appendLog("예약 조회를 중지합니다.")
-    }
-
-    private fun observeWork() {
-        workManager.getWorkInfosByTagLiveData(WORK_TAG).observe(this, Observer { workInfos ->
-            if (workInfos.isNullOrEmpty()) return@Observer
-
-            val workInfo = workInfos[0]
-
-            if (workInfo.state.isFinished) {
-                val finalLog = workInfo.outputData.getString("log")
-                if (!finalLog.isNullOrBlank()) {
-                    appendLog("작업자: $finalLog")
-                }
-            }
-        })
+        checkRunnable?.let { handler.removeCallbacks(it) }
+        checkRunnable = null
     }
 
     private fun checkReservationInWebView() {
@@ -223,15 +207,27 @@ class MainActivity : AppCompatActivity() {
         }
     }
 
+    data class JsResult(val dates: List<String>?, val error: String?)
+
     class WebAppInterface(private val context: Context) {
         @JavascriptInterface
         fun processResult(result: String) {
             (context as MainActivity).runOnUiThread {
                 context.appendLog("WebView 예약 확인 결과: $result")
                 val gson = Gson()
-                val type = object : TypeToken<List<String>>() {}.type
-                val availableDates: List<String> = gson.fromJson(result, type)
+                val jsResult = gson.fromJson(result, JsResult::class.java)
 
+                jsResult.error?.let { error ->
+                    context.appendLog("예약 확인 중 오류: $error")
+                    if (error.contains("LOGIN_REQUIRED")) {
+                        context.appendLog("세션 만료 감지, 재로그인 시도")
+                        context.stopWork()
+                        context.startLoginProcess(auto = true)
+                    }
+                    return@runOnUiThread
+                }
+
+                val availableDates = jsResult.dates ?: emptyList()
                 if (availableDates.isNotEmpty()) {
                     val distinctDates = availableDates.distinct().sorted()
                     val message = """🎉 예약 가능한 날짜를 찾았습니다! 🎉
@@ -240,6 +236,8 @@ ${distinctDates.joinToString("\n") { "- $it" }}
 
 [지금 바로 예약하기](https://www.snuh.org/reservation/reservation.do)"""
                     context.sendTelegramMessage(message)
+                } else {
+                    context.appendLog("예약 가능한 날짜가 없습니다.")
                 }
             }
         }
