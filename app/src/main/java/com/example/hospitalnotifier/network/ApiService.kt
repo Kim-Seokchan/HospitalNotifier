@@ -4,7 +4,6 @@ import retrofit2.Response
 import retrofit2.http.Field
 import retrofit2.http.FormUrlEncoded
 import retrofit2.http.GET
-import retrofit2.http.Header
 import retrofit2.http.POST
 import retrofit2.http.Query
 
@@ -22,10 +21,9 @@ interface ApiService {
         @Field("pass") userPw: String
     ): Response<Void>
 
-    // 예약 가능일 확인 요청
+    // 예약 가능일 확인 요청. 세션 쿠키는 [SharedPrefsCookieJar]가 자동으로 포함한다.
     @GET("/reservation/medDateListAjax.do")
     suspend fun checkAvailability(
-        @Header("Cookie") sessionCookie: String,
         @Query("dept_cd") deptCd: String,
         @Query("dr_cd") drCd: String,
         @Query("nextDt") nextDt: String

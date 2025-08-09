@@ -9,6 +9,7 @@ import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
 import okhttp3.OkHttpClient
 import okhttp3.Request
+import retrofit2.HttpException
 
 class ReservationWorker(appContext: Context, workerParams: WorkerParameters) :
     CoroutineWorker(appContext, workerParams) {
@@ -23,36 +24,48 @@ class ReservationWorker(appContext: Context, workerParams: WorkerParameters) :
         Log.d("ReservationWorker", "작업 시작: $userId")
 
         try {
-            // 1. 로그인 시도
-            val loginResponse = ApiClient.instance.login(userId, userPw)
-            if (!loginResponse.isSuccessful) {
-                Log.e("ReservationWorker", "로그인 실패")
-                return Result.retry() // 실패 시 나중에 재시도
-            }
+            val api = ApiClient.create(applicationContext)
 
-            // 2. 응답 헤더에서 세션 쿠키 가져오기
-            val cookies = loginResponse.headers().values("Set-Cookie")
-            val sessionCookie = cookies.joinToString(separator = "; ")
-            if (sessionCookie.isEmpty()) {
-                Log.e("ReservationWorker", "세션 쿠키 얻기 실패")
+            // 1. 로그인 시도하여 세션 쿠키를 확보
+            if (!ensureLoggedIn(api, userId, userPw)) {
+                Log.e("ReservationWorker", "로그인 실패")
                 return Result.retry()
             }
 
-            // 3. 예약 확인 요청 (Python 코드의 check_reservation 로직)
-            // 예시: 2025년 7월, 8월 확인
+            // 2. 예약 확인 요청 (Python 코드의 check_reservation 로직)
             val monthsToCheck = listOf("20250701", "20250801")
             var foundDates = ""
 
             for (month in monthsToCheck) {
-                val response = ApiClient.instance.checkAvailability(sessionCookie, "OSHS", "05081", month)
-                response.scheduleList?.forEach {
-                    if (it.meddate != null) {
-                        foundDates += "${it.meddate}\n"
+                try {
+                    val response = api.checkAvailability("OSHS", "05081", month)
+                    response.scheduleList?.forEach {
+                        it.meddate?.let { date ->
+                            foundDates += "$date\n"
+                        }
+                    }
+                } catch (e: HttpException) {
+                    // 세션 만료 가능성. 재로그인 후 한 번 더 시도
+                    if (e.code() == 401 || (e.code() in 300..399)) {
+                        Log.d("ReservationWorker", "세션 만료로 쿠키 갱신 시도")
+        
+                        if (ensureLoggedIn(api, userId, userPw)) {
+                            val retry = api.checkAvailability("OSHS", "05081", month)
+                            retry.scheduleList?.forEach {
+                                it.meddate?.let { date ->
+                                    foundDates += "$date\n"
+                                }
+                            }
+                        } else {
+                            return Result.retry()
+                        }
+                    } else {
+                        throw e
                     }
                 }
             }
 
-            // 4. 예약 가능한 날짜가 있으면 텔레그램 메시지 발송
+            // 3. 예약 가능한 날짜가 있으면 텔레그램 메시지 발송
             if (foundDates.isNotEmpty()) {
                 val message = "🎉 예약 가능한 날짜를 찾았습니다!\n$foundDates"
                 sendTelegramMessage(message, token, chatId)
@@ -62,10 +75,9 @@ class ReservationWorker(appContext: Context, workerParams: WorkerParameters) :
             }
 
             return Result.success()
-
         } catch (e: Exception) {
             Log.e("ReservationWorker", "오류 발생: ${e.message}")
-            return Result.retry() // 네트워크 오류 등 예외 발생 시 재시도
+            return Result.retry()
         }
     }
 
@@ -86,6 +98,14 @@ class ReservationWorker(appContext: Context, workerParams: WorkerParameters) :
             } catch (e: Exception) {
                 Log.e("Telegram", "네트워크 오류: ${e.message}")
             }
+        }
+    }
+
+    private suspend fun ensureLoggedIn(api: com.example.hospitalnotifier.network.ApiService, id: String, pw: String): Boolean {
+        return try {
+            api.login(id, pw).isSuccessful
+        } catch (e: Exception) {
+            false
         }
     }
 }
