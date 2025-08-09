@@ -5,7 +5,6 @@ import android.util.Log
 import androidx.work.CoroutineWorker
 import androidx.work.WorkerParameters
 import com.example.hospitalnotifier.network.ApiClient
-import com.example.hospitalnotifier.network.AuthRepository
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
 import okhttp3.OkHttpClient
@@ -24,15 +23,16 @@ class ReservationWorker(appContext: Context, workerParams: WorkerParameters) :
         Log.d("ReservationWorker", "작업 시작: $userId")
 
         try {
-            // 1. 로그인 시도 (실패/리다이렉트 로그 포함)
-            val sessionResult = AuthRepository.login(userId, userPw)
-            if (sessionResult.isFailure) {
-                Log.e("ReservationWorker", "로그인 실패: ${sessionResult.exceptionOrNull()?.message}")
-                return Result.retry()
+            // 1. 로그인 시도
+            val loginResponse = ApiClient.instance.login(userId, userPw)
+            if (!loginResponse.isSuccessful) {
+                Log.e("ReservationWorker", "로그인 실패")
+                return Result.retry() // 실패 시 나중에 재시도
             }
 
-            // 2. 세션 쿠키 확보
-            val sessionCookie = sessionResult.getOrNull().orEmpty()
+            // 2. 응답 헤더에서 세션 쿠키 가져오기
+            val cookies = loginResponse.headers().values("Set-Cookie")
+            val sessionCookie = cookies.joinToString(separator = "; ")
             if (sessionCookie.isEmpty()) {
                 Log.e("ReservationWorker", "세션 쿠키 얻기 실패")
                 return Result.retry()
