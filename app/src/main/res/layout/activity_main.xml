@@ -37,6 +37,22 @@
         android:hint="텔레그램 채팅 ID"
         android:inputType="text" />
 
+    <EditText
+        android:id="@+id/monthsEditText"
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:hint="확인할 월 (예: 202507, 202508)"
+        android:inputType="text" />
+
+    <NumberPicker
+        android:id="@+id/intervalPicker"
+        android:layout_width="wrap_content"
+        android:layout_height="wrap_content"
+        android:layout_gravity="center_horizontal"
+        android:minValue="1"
+        android:maxValue="60"
+        android:value="15" />
+
     <Button
         android:id="@+id/startButton"
         android:layout_width="wrap_content"
