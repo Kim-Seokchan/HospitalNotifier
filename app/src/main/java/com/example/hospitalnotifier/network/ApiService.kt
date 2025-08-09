@@ -1,6 +1,5 @@
 package com.example.hospitalnotifier.network
 
-import okhttp3.ResponseBody
 import retrofit2.Response
 import retrofit2.http.Field
 import retrofit2.http.FormUrlEncoded
@@ -15,18 +14,12 @@ data class ScheduleItem(val meddate: String?)
 
 // 어떤 주소로 통신할지 정의하는 메뉴판
 interface ApiService {
-    // 로그인 페이지 로딩 (CSRF 토큰 및 초기 쿠키 추출용)
-    @GET("/login.do")
-    suspend fun fetchLoginPage(): Response<ResponseBody>
-
-    // 로그인 요청 (필수 파라미터와 헤더를 함께 전달)
+    // 로그인 요청 (실제 요청 경로는 병원 웹사이트에 맞게 수정 필요)
     @FormUrlEncoded
     @POST("/login.do")
     suspend fun login(
-        @Header("Cookie") cookie: String,
         @Field("id") userId: String,
-        @Field("pass") userPw: String,
-        @Field("csrfToken") csrfToken: String
+        @Field("pass") userPw: String
     ): Response<Void>
 
     // 예약 가능일 확인 요청
@@ -38,4 +31,3 @@ interface ApiService {
         @Query("nextDt") nextDt: String
     ): ScheduleResponse
 }
-

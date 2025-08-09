@@ -53,9 +53,6 @@ dependencies {
     // 3. Kotlin Coroutines: 비동기 처리를 위함
     implementation("org.jetbrains.kotlinx:kotlinx-coroutines-android:1.7.3")
 
-    // Lifecycle scope 사용을 위해
-    implementation("androidx.lifecycle:lifecycle-runtime-ktx:2.8.6")
-
     implementation(libs.androidx.core.ktx)
     implementation(libs.androidx.appcompat)
     implementation(libs.material)
