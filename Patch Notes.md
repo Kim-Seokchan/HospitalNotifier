@@ -35,3 +35,7 @@ Patch Notes(지시사항-작업내용 순)
 - 지시사항: LiveData에서 RUNNING 상태인 최신 WorkRequest만 추적하고 완료된 WorkInfo의 progress는 중복 기록되지 않도록 처리하며 stopWork 호출 시 관찰 상태를 초기화할 것.
 - 작업방향 수정내용: 해당 없음.
 - 작업내용: MainActivity.observeWorker에서 RUNNING 상태 WorkInfo 중 가장 최근 항목만 선택하고 완료된 WorkInfo는 집합으로 관리해 progress 중복 로그를 방지하도록 수정하고, stopWork에서 추적 ID와 집합을 초기화함.
+
+- 지시사항: ReservationWorker.startLoginProcess 실행 직전에 cookies SharedPreferences를 clear()하여 기존 세션을 제거하고, 로그인 후 필수 세션 쿠키를 확인하여 없으면 "세션 쿠키 없음" 상태 로그와 함께 실패를 반환하며, 실패 시 cookies와 로그인 정보 저장소에서 관련 항목을 삭제할 것.
+- 작업방향 수정내용: 해당 없음.
+- 작업내용: ReservationWorker.kt에서 startLoginProcess 호출 전 clearCookies()를 수행하고, 로그인 후 JSESSIONID1 검증 실패 시 상태 로그를 남기고 cookies 및 settings에서 쿠키와 로그인 정보를 제거하도록 수정. 실패 테스트에 이러한 정리 동작을 확인하는 단위 테스트 보강.
