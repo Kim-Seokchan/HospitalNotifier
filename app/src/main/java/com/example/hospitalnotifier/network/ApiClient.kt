@@ -50,7 +50,16 @@ object ApiClient {
     }
 
     fun getLoginApi(context: Context): SnuhLoginApi {
-        val okHttpClient = baseClient(context).build()
+        val okHttpClient = baseClient(context)
+            .addInterceptor { chain ->
+                val original = chain.request()
+                val request = original.newBuilder()
+                    .header("Referer", "https://www.snuh.org/login.do")
+                    .header("X-Requested-With", "XMLHttpRequest")
+                    .build()
+                chain.proceed(request)
+            }
+            .build()
 
         val retrofit = Retrofit.Builder()
             .baseUrl(BASE_URL)

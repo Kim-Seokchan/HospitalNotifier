@@ -6,7 +6,7 @@ import retrofit2.http.POST
 
 interface SnuhLoginApi {
     @FormUrlEncoded
-    @POST("loginAjax.do")
+    @POST("loginProc.do")
     suspend fun login(
         @Field("id") id: String,
         @Field("pass") password: String
