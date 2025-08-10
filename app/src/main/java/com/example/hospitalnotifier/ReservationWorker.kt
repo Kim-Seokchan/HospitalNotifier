@@ -27,6 +27,7 @@ class ReservationWorker(private val appContext: Context, workerParams: WorkerPar
         val chatId = sharedPref.getString("telegramChatId", null)
 
         return try {
+            clearCookies()
             when (val loginResult = startLoginProcess(id, password)) {
                 is Result.Success -> {}
                 else -> return loginResult
@@ -53,6 +54,7 @@ class ReservationWorker(private val appContext: Context, workerParams: WorkerPar
 
                         if (response.code() == 401 || response.code() == 302) {
                             Log.w(TAG, "세션 만료 감지 (HTTP ${'$'}{response.code()})")
+                            clearCookies()
                             val reLogin = startLoginProcess(id, password)
                             if (reLogin !is Result.Success) {
                                 Log.e(TAG, "세션 재로그인 실패")
@@ -77,6 +79,7 @@ class ReservationWorker(private val appContext: Context, workerParams: WorkerPar
                         setProgress(workDataOf("status" to "예약 조회 실패: ${e.message}"))
                         if (e is HttpException && (e.code() == 401 || e.code() == 302)) {
                             Log.w(TAG, "세션 만료 예외 (HTTP ${'$'}{e.code()})")
+                            clearCookies()
                             val reLogin = startLoginProcess(id, password)
                             if (reLogin !is Result.Success) {
                                 Log.e(TAG, "세션 재로그인 실패: ${'$'}{e.message}")
@@ -119,6 +122,8 @@ class ReservationWorker(private val appContext: Context, workerParams: WorkerPar
             val response = loginApi.login(id, password)
             if (response.contains("login.do")) {
                 Log.e(TAG, "로그인 실패 응답: $response")
+                clearCookies()
+                clearLoginInfo()
                 Result.failure()
             } else {
                 val cookiesPref = appContext.getSharedPreferences("cookies", Context.MODE_PRIVATE)
@@ -126,6 +131,8 @@ class ReservationWorker(private val appContext: Context, workerParams: WorkerPar
                 if (session == null) {
                     Log.e(TAG, "세션 쿠키(JSESSIONID1) 미확보")
                     setProgress(workDataOf("status" to "세션 쿠키 없음"))
+                    clearCookies()
+                    clearLoginInfo()
                     Result.failure()
                 } else {
                     Log.d(TAG, "세션 쿠키 확보: ${'$'}{session.key}=${'$'}{session.value}")
@@ -134,8 +141,25 @@ class ReservationWorker(private val appContext: Context, workerParams: WorkerPar
             }
         } catch (e: Exception) {
             Log.e(TAG, "로그인 실패: ${'$'}{e.message}")
+            clearCookies()
+            clearLoginInfo()
             Result.retry()
         }
+    }
+
+    private fun clearCookies() {
+        appContext.getSharedPreferences("cookies", Context.MODE_PRIVATE)
+            .edit()
+            .clear()
+            .apply()
+    }
+
+    private fun clearLoginInfo() {
+        appContext.getSharedPreferences("settings", Context.MODE_PRIVATE)
+            .edit()
+            .remove("id")
+            .remove("password")
+            .apply()
     }
 
     companion object {

@@ -61,7 +61,9 @@ class MyCookieJarTest {
     fun `startLoginProcess fails without session cookie`() = runBlocking {
         val context = ApplicationProvider.getApplicationContext<Context>()
         val cookiePrefs = context.getSharedPreferences("cookies", Context.MODE_PRIVATE)
-        cookiePrefs.edit().clear().apply()
+        cookiePrefs.edit().putString("dummy", "value").apply()
+        val settingsPrefs = context.getSharedPreferences("settings", Context.MODE_PRIVATE)
+        settingsPrefs.edit().putString("id", "id").putString("password", "pass").apply()
 
         val loginApi = mockk<SnuhLoginApi>()
         coEvery { loginApi.initSession() } returns ""
@@ -73,6 +75,9 @@ class MyCookieJarTest {
         val worker = TestListenableWorkerBuilder<ReservationWorker>(context).build()
         val result = worker.startLoginProcess("id", "pass")
         assertTrue(result is Result.Failure)
+        assertTrue(cookiePrefs.all.isEmpty())
+        assertTrue(settingsPrefs.getString("id", null) == null)
+        assertTrue(settingsPrefs.getString("password", null) == null)
 
         unmockkAll()
     }
