@@ -11,16 +11,24 @@ class MyCookieJar(context: Context) : CookieJar {
     override fun saveFromResponse(url: HttpUrl, cookies: List<Cookie>) {
         val editor = sharedPreferences.edit()
         for (cookie in cookies) {
-            editor.putString(cookie.name, cookie.value)
+            val key = "${'$'}{cookie.domain}|${'$'}{cookie.path}|${'$'}{cookie.name}"
+            if (cookie.expiresAt < System.currentTimeMillis()) {
+                editor.remove(key)
+            } else {
+                editor.putString(key, cookie.toString())
+            }
         }
         editor.apply()
     }
 
     override fun loadForRequest(url: HttpUrl): List<Cookie> {
         val cookies = mutableListOf<Cookie>()
-        for ((name, value) in sharedPreferences.all) {
+        for ((_, value) in sharedPreferences.all) {
             if (value is String) {
-                cookies.add(Cookie.Builder().name(name).value(value).domain(url.host).build())
+                val parsed = Cookie.parse(url, value)
+                if (parsed != null && parsed.matches(url)) {
+                    cookies.add(parsed)
+                }
             }
         }
         return cookies
