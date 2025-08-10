@@ -8,6 +8,7 @@ import android.util.Log
 import androidx.appcompat.app.AppCompatActivity
 import androidx.core.content.edit
 import androidx.work.ExistingPeriodicWorkPolicy
+import androidx.work.ExistingWorkPolicy
 import androidx.work.OneTimeWorkRequestBuilder
 import androidx.work.PeriodicWorkRequestBuilder
 import androidx.work.WorkManager
@@ -154,10 +155,19 @@ class MainActivity : AppCompatActivity() {
 
     private fun startWork() {
         val intervalMinutes = binding.spinnerInterval.selectedItem as Float
+        val workManager = WorkManager.getInstance(this)
+
+        workManager.cancelAllWorkByTag(WORK_TAG)
+
         val oneTimeRequest = OneTimeWorkRequestBuilder<ReservationWorker>()
             .addTag(WORK_TAG)
             .build()
-        WorkManager.getInstance(this).enqueue(oneTimeRequest)
+
+        workManager.enqueueUniqueWork(
+            WORK_TAG,
+            ExistingWorkPolicy.REPLACE,
+            oneTimeRequest
+        )
 
         val periodicRequest = PeriodicWorkRequestBuilder<ReservationWorker>(
             intervalMinutes.toLong(), TimeUnit.MINUTES
@@ -165,7 +175,7 @@ class MainActivity : AppCompatActivity() {
             .addTag(WORK_TAG)
             .build()
 
-        WorkManager.getInstance(this).enqueueUniquePeriodicWork(
+        workManager.enqueueUniquePeriodicWork(
             WORK_TAG,
             ExistingPeriodicWorkPolicy.REPLACE,
             periodicRequest
