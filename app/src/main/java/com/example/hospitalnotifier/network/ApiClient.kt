@@ -54,7 +54,7 @@ object ApiClient {
             .addInterceptor { chain ->
                 val original = chain.request()
                 val requestBuilder = original.newBuilder()
-                    .header("Referer", "https://www.snuh.org/login/login.do")
+                    .header("Referer", "https://www.snuh.org/login.do")
                     .header("User-Agent", USER_AGENT)
                     .header("X-Requested-With", "XMLHttpRequest")
                 val request = requestBuilder.build()
