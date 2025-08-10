@@ -15,3 +15,7 @@ Patch Notes(지시사항-작업내용 순)
 - 지시사항: 예약 조회 실패 시 오류 로그 및 진행상태 메시지를 전송하여 UI에서 진단 정보를 표시하도록 할 것.
 - 작업방향 수정내용: 해당 없음.
 - 작업내용: ReservationWorker.kt의 예약 조회 예외 처리에 Log.e와 setProgress를 추가하여 오류 메시지를 기록하고 전송하도록 수정.
+
+- 지시사항: baseClient에 네트워크 타임아웃을 설정하고 TimeUnit을 임포트할 것.
+- 작업방향 수정내용: 해당 없음.
+- 작업내용: ApiClient.kt의 baseClient에 connectTimeout 10초, readTimeout 10초, callTimeout 20초를 추가하고 java.util.concurrent.TimeUnit을 임포트함.
