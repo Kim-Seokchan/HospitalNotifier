@@ -7,22 +7,21 @@ import android.widget.Toast
 import android.util.Log
 import androidx.appcompat.app.AppCompatActivity
 import androidx.core.content.edit
+import androidx.work.ExistingPeriodicWorkPolicy
+import androidx.work.OneTimeWorkRequestBuilder
+import androidx.work.PeriodicWorkRequestBuilder
+import androidx.work.WorkManager
 import com.example.hospitalnotifier.databinding.ActivityMainBinding
 import com.example.hospitalnotifier.network.ApiClient
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
-import kotlinx.coroutines.Job
-import kotlinx.coroutines.MainScope
-import kotlinx.coroutines.delay
-import kotlinx.coroutines.isActive
 import kotlinx.coroutines.launch
+import java.util.concurrent.TimeUnit
 
 class MainActivity : AppCompatActivity() {
 
     private lateinit var binding: ActivityMainBinding
     private var isLoginProcessing = false
-    private val scope = MainScope()
-    private var reservationJob: Job? = null
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
@@ -34,7 +33,7 @@ class MainActivity : AppCompatActivity() {
     }
 
     private fun setupSpinner() {
-        val intervals = arrayOf(0.5f, 1f, 5f, 10f, 15f)
+        val intervals = arrayOf(15f, 30f, 60f)
         val adapter = ArrayAdapter(this, android.R.layout.simple_spinner_item, intervals)
         adapter.setDropDownViewResource(android.R.layout.simple_spinner_dropdown_item)
         binding.spinnerInterval.adapter = adapter
@@ -81,7 +80,7 @@ class MainActivity : AppCompatActivity() {
                     isLoginProcessing = false
                     appendLog("로그인 성공")
                     saveLoginData(id, password)
-                    startPeriodicCheck()
+                    startWork()
                     Toast.makeText(
                         this@MainActivity,
                         "로그인 성공. 예약 조회를 시작합니다.",
@@ -116,26 +115,28 @@ class MainActivity : AppCompatActivity() {
         appendLog("ID와 비밀번호를 포함한 로그인 정보를 저장했습니다.")
     }
 
-    private fun startPeriodicCheck() {
+    private fun startWork() {
         val intervalMinutes = binding.spinnerInterval.selectedItem as Float
-        reservationJob?.cancel()
-        reservationJob = scope.launch {
-            while (isActive) {
-                checkReservationInWebView()
-                delay((intervalMinutes * 60_000).toLong())
-            }
-        }
+        val oneTimeRequest = OneTimeWorkRequestBuilder<ReservationWorker>().build()
+        WorkManager.getInstance(this).enqueue(oneTimeRequest)
+
+        val periodicRequest = PeriodicWorkRequestBuilder<ReservationWorker>(
+            intervalMinutes.toLong(), TimeUnit.MINUTES
+        ).build()
+
+        WorkManager.getInstance(this).enqueueUniquePeriodicWork(
+            "reservationWork",
+            ExistingPeriodicWorkPolicy.REPLACE,
+            periodicRequest
+        )
+
         appendLog("예약 조회를 시작합니다.")
     }
 
     private fun stopWork() {
-        reservationJob?.cancel()
+        WorkManager.getInstance(this).cancelUniqueWork("reservationWork")
         Toast.makeText(this, "예약 조회를 중지합니다.", Toast.LENGTH_SHORT).show()
         appendLog("예약 조회를 중지합니다.")
-    }
-
-    private suspend fun checkReservationInWebView() {
-        // TODO: 웹뷰에서 예약 확인 로직 구현
     }
 
     private fun appendLog(message: String) {
