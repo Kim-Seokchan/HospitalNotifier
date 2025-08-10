@@ -80,13 +80,20 @@ class MainActivity : AppCompatActivity() {
                 runOnUiThread {
                     isLoginProcessing = false
                     appendLog("로그인 성공")
-                    saveLoginData(id, password)
-                    startWork()
-                    Toast.makeText(
-                        this@MainActivity,
-                        "로그인 성공. 예약 조회를 시작합니다.",
-                        Toast.LENGTH_SHORT
-                    ).show()
+                    if (saveLoginData(id, password)) {
+                        startWork()
+                        Toast.makeText(
+                            this@MainActivity,
+                            "로그인 성공. 예약 조회를 시작합니다.",
+                            Toast.LENGTH_SHORT
+                        ).show()
+                    } else {
+                        Toast.makeText(
+                            this@MainActivity,
+                            "로그인 성공. 그러나 조회할 월 입력을 확인하세요.",
+                            Toast.LENGTH_LONG
+                        ).show()
+                    }
                 }
             } catch (e: Exception) {
                 Log.e(TAG, "로그인 실패: ${'$'}{e.message}")
@@ -99,21 +106,50 @@ class MainActivity : AppCompatActivity() {
         }
     }
 
-    private fun saveLoginData(id: String, password: String) {
-        val targetMonths = binding.editTextTargetMonths.text.toString()
+    private fun saveLoginData(id: String, password: String): Boolean {
+        val rawMonths = binding.editTextTargetMonths.text.toString()
+        val months = rawMonths.split(",").map { it.trim() }.filter { it.isNotEmpty() }
+        if (months.isEmpty()) {
+            Toast.makeText(this, "조회할 년-월을 입력해주세요.", Toast.LENGTH_SHORT).show()
+            appendLog("targetMonths 입력 없음")
+            return false
+        }
+
+        val normalizedMonths = mutableListOf<String>()
+        val regex = Regex("^(\\d{4})-(\\d{1,2})$")
+        for (m in months) {
+            val match = regex.matchEntire(m)
+            if (match != null) {
+                val year = match.groupValues[1]
+                val monthNum = match.groupValues[2].toInt()
+                if (monthNum in 1..12) {
+                    normalizedMonths.add("$year-${monthNum.toString().padStart(2, '0')}")
+                } else {
+                    Toast.makeText(this, "${m} 은(는) 올바른 월이 아닙니다.", Toast.LENGTH_LONG).show()
+                    appendLog("잘못된 월 입력: $m")
+                    return false
+                }
+            } else {
+                Toast.makeText(this, "${m} 은(는) YYYY-MM 형식이 아닙니다.", Toast.LENGTH_LONG).show()
+                appendLog("잘못된 월 입력: $m")
+                return false
+            }
+        }
+
         val interval = binding.spinnerInterval.selectedItem as Float
-        val telegramToken = binding.editTextTelegramToken.text.toString()
-        val telegramChatId = binding.editTextTelegramChatId.text.toString()
+        val telegramToken = binding.editTextTelegramToken.text.toString().trim()
+        val telegramChatId = binding.editTextTelegramChatId.text.toString().trim()
         val sharedPref = getSharedPreferences("settings", Context.MODE_PRIVATE)
         sharedPref.edit(commit = true) {
             putString("id", id)
             putString("password", password)
-            putString("targetMonths", targetMonths)
+            putString("targetMonths", normalizedMonths.joinToString(","))
             putFloat("interval", interval)
             putString("telegramToken", telegramToken)
             putString("telegramChatId", telegramChatId)
         }
         appendLog("ID와 비밀번호를 포함한 로그인 정보를 저장했습니다.")
+        return true
     }
 
     private fun startWork() {
