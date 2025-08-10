@@ -1,4 +1,4 @@
-package com.example.hospitalnotifier
+package com.example.hospitalnotifier.network
 
 import retrofit2.Response
 import retrofit2.http.Field
@@ -17,3 +17,4 @@ interface TelegramApi {
         @Field("parse_mode") parseMode: String = "Markdown"
     ): Response<String>
 }
+
