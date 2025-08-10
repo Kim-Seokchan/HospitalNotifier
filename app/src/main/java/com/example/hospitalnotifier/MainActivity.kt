@@ -30,6 +30,7 @@ class MainActivity : AppCompatActivity() {
 
         setupSpinner()
         setupClickListeners()
+        observeWorker()
     }
 
     private fun setupSpinner() {
@@ -117,15 +118,19 @@ class MainActivity : AppCompatActivity() {
 
     private fun startWork() {
         val intervalMinutes = binding.spinnerInterval.selectedItem as Float
-        val oneTimeRequest = OneTimeWorkRequestBuilder<ReservationWorker>().build()
+        val oneTimeRequest = OneTimeWorkRequestBuilder<ReservationWorker>()
+            .addTag(WORK_TAG)
+            .build()
         WorkManager.getInstance(this).enqueue(oneTimeRequest)
 
         val periodicRequest = PeriodicWorkRequestBuilder<ReservationWorker>(
             intervalMinutes.toLong(), TimeUnit.MINUTES
-        ).build()
+        )
+            .addTag(WORK_TAG)
+            .build()
 
         WorkManager.getInstance(this).enqueueUniquePeriodicWork(
-            "reservationWork",
+            WORK_TAG,
             ExistingPeriodicWorkPolicy.REPLACE,
             periodicRequest
         )
@@ -134,9 +139,20 @@ class MainActivity : AppCompatActivity() {
     }
 
     private fun stopWork() {
-        WorkManager.getInstance(this).cancelUniqueWork("reservationWork")
+        WorkManager.getInstance(this).cancelUniqueWork(WORK_TAG)
         Toast.makeText(this, "예약 조회를 중지합니다.", Toast.LENGTH_SHORT).show()
         appendLog("예약 조회를 중지합니다.")
+    }
+
+    private fun observeWorker() {
+        WorkManager.getInstance(this)
+            .getWorkInfosByTagLiveData(WORK_TAG)
+            .observe(this) { workInfos ->
+                workInfos.forEach { info ->
+                    val status = info.progress.getString("status")
+                    status?.let { appendLog(it) }
+                }
+            }
     }
 
     private fun appendLog(message: String) {
@@ -147,5 +163,6 @@ class MainActivity : AppCompatActivity() {
 
     companion object {
         private const val TAG = "MainActivity"
+        private const val WORK_TAG = "reservationWork"
     }
 }

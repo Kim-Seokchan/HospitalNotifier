@@ -4,6 +4,7 @@ import android.content.Context
 import android.util.Log
 import androidx.work.CoroutineWorker
 import androidx.work.WorkerParameters
+import androidx.work.workDataOf
 import com.example.hospitalnotifier.network.ApiClient
 import com.example.hospitalnotifier.network.ScheduleResponse
 import com.example.hospitalnotifier.network.TelegramClient
@@ -15,6 +16,9 @@ class ReservationWorker(private val appContext: Context, workerParams: WorkerPar
     CoroutineWorker(appContext, workerParams) {
 
     override suspend fun doWork(): Result {
+        Log.d(TAG, "Worker started")
+        setProgress(workDataOf("status" to "Worker started"))
+
         val sharedPref = appContext.getSharedPreferences("settings", Context.MODE_PRIVATE)
         val id = sharedPref.getString("id", null) ?: return Result.failure()
         val password = sharedPref.getString("password", null) ?: return Result.failure()
@@ -32,6 +36,8 @@ class ReservationWorker(private val appContext: Context, workerParams: WorkerPar
             val months = targetMonths.split(",").map { it.trim() }
             val availableDates = mutableListOf<String>()
             for (month in months) {
+                Log.d(TAG, "Querying month: $month")
+                setProgress(workDataOf("status" to "Querying month: $month"))
                 val parts = month.split("-")
                 if (parts.size != 2) continue
                 val nextDt = parts[0] + parts[1].padStart(2, '0') + "01"
@@ -76,6 +82,8 @@ class ReservationWorker(private val appContext: Context, workerParams: WorkerPar
                 }
                 delay(1000)
             }
+            Log.d(TAG, "Available dates: $availableDates")
+            setProgress(workDataOf("status" to "Available dates: $availableDates"))
             if (availableDates.isNotEmpty() && !token.isNullOrBlank() && !chatId.isNullOrBlank()) {
                 val distinctDates = availableDates.distinct().sorted()
                 val message = """🎉 예약 가능한 날짜를 찾았습니다! 🎉\n\n${distinctDates.joinToString("\n") { "- $it" }}\n\n[지금 바로 예약하기](https://www.snuh.org/reservation/reservation.do)"""
