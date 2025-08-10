@@ -39,3 +39,7 @@ Patch Notes(지시사항-작업내용 순)
 - 지시사항: ReservationWorker.startLoginProcess 실행 직전에 cookies SharedPreferences를 clear()하여 기존 세션을 제거하고, 로그인 후 필수 세션 쿠키를 확인하여 없으면 "세션 쿠키 없음" 상태 로그와 함께 실패를 반환하며, 실패 시 cookies와 로그인 정보 저장소에서 관련 항목을 삭제할 것.
 - 작업방향 수정내용: 해당 없음.
 - 작업내용: ReservationWorker.kt에서 startLoginProcess 호출 전 clearCookies()를 수행하고, 로그인 후 JSESSIONID1 검증 실패 시 상태 로그를 남기고 cookies 및 settings에서 쿠키와 로그인 정보를 제거하도록 수정. 실패 테스트에 이러한 정리 동작을 확인하는 단위 테스트 보강.
+
+- 지시사항: MainActivity.startWork에서 즉시 실행이 필요하지 않으면 원타임 WorkRequest를 제거하고 주기 작업만 사용하며, stopWork에서 현재 실행 중인 작업을 cancelAllWorkByTag(WORK_TAG)로 중단할 것.
+- 작업방향 수정내용: 해당 없음.
+- 작업내용: MainActivity.kt의 startWork를 enqueueUniquePeriodicWork만 사용하도록 정리하고, stopWork에서 cancelAllWorkByTag를 호출하여 실행 중인 작업을 즉시 취소하도록 변경.
