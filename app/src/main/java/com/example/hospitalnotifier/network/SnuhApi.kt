@@ -4,9 +4,6 @@ import retrofit2.Response
 import retrofit2.http.GET
 import retrofit2.http.Query
 
-data class ScheduleResponse(val scheduleList: List<ScheduleItem>?)
-data class ScheduleItem(val meddate: String?)
-
 interface SnuhApi {
     @GET("reservation/medDateListAjax.do")
     suspend fun checkAvailability(
