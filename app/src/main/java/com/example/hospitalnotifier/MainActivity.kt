@@ -98,7 +98,7 @@ class MainActivity : AppCompatActivity() {
             putString("telegramToken", telegramToken)
             putString("telegramChatId", telegramChatId)
         }
-        appendLog("로그인 정보를 저장했습니다.")
+        appendLog("ID와 비밀번호를 포함한 로그인 정보를 저장했습니다.")
     }
 
     private fun startWork() {

@@ -1,12 +1,15 @@
 package com.example.hospitalnotifier
 
 import android.content.Context
+import android.util.Log
 import androidx.work.CoroutineWorker
 import androidx.work.WorkerParameters
 import com.example.hospitalnotifier.network.ApiClient
 import com.example.hospitalnotifier.network.ScheduleResponse
 import com.example.hospitalnotifier.network.TelegramClient
 import kotlinx.coroutines.delay
+import retrofit2.HttpException
+import retrofit2.Response
 
 class ReservationWorker(private val appContext: Context, workerParams: WorkerParameters) :
     CoroutineWorker(appContext, workerParams) {
@@ -20,8 +23,9 @@ class ReservationWorker(private val appContext: Context, workerParams: WorkerPar
         val chatId = sharedPref.getString("telegramChatId", null)
 
         return try {
-            // 로그인 시도 (쿠키 저장)
-            ApiClient.getLoginApi(appContext).login(id, password)
+            if (!startLoginProcess(id, password)) {
+                return Result.retry()
+            }
 
             val api = ApiClient.getSnuhApi(appContext)
             val months = targetMonths.split(",").map { it.trim() }
@@ -30,17 +34,42 @@ class ReservationWorker(private val appContext: Context, workerParams: WorkerPar
                 val parts = month.split("-")
                 if (parts.size != 2) continue
                 val nextDt = parts[0] + parts[1].padStart(2, '0') + "01"
-                try {
-                    val response: ScheduleResponse = api.checkAvailability(
-                        hspCd = "1",
-                        deptCd = "OSHS",
-                        drCd = "05081",
-                        nextDt = nextDt
-                    )
-                    response.scheduleList?.forEach { item ->
-                        item.meddate?.let { availableDates.add(it) }
+                var attempt = 0
+                while (attempt < 2) {
+                    try {
+                        val response: Response<ScheduleResponse> = api.checkAvailability(
+                            hspCd = "1",
+                            deptCd = "OSHS",
+                            drCd = "05081",
+                            nextDt = nextDt
+                        )
+
+                        if (response.code() == 401 || response.code() == 302) {
+                            Log.w(TAG, "세션 만료 감지 (HTTP ${'$'}{response.code()})")
+                            if (!startLoginProcess(id, password)) {
+                                Log.e(TAG, "세션 재로그인 실패")
+                                return Result.retry()
+                            }
+                            attempt++
+                            continue
+                        }
+
+                        response.body()?.scheduleList?.forEach { item ->
+                            item.meddate?.let { availableDates.add(it) }
+                        }
+                        break
+                    } catch (e: Exception) {
+                        if (e is HttpException && (e.code() == 401 || e.code() == 302)) {
+                            Log.w(TAG, "세션 만료 예외 (HTTP ${'$'}{e.code()})")
+                            if (!startLoginProcess(id, password)) {
+                                Log.e(TAG, "세션 재로그인 실패: ${'$'}{e.message}")
+                                return Result.retry()
+                            }
+                            attempt++
+                        } else {
+                            break
+                        }
                     }
-                } catch (_: Exception) {
                 }
                 delay(1000)
             }
@@ -56,5 +85,19 @@ class ReservationWorker(private val appContext: Context, workerParams: WorkerPar
         } catch (_: Exception) {
             Result.retry()
         }
+    }
+
+    private suspend fun startLoginProcess(id: String, password: String): Boolean {
+        return try {
+            ApiClient.getLoginApi(appContext).login(id, password)
+            true
+        } catch (e: Exception) {
+            Log.e(TAG, "로그인 실패: ${'$'}{e.message}")
+            false
+        }
+    }
+
+    companion object {
+        private const val TAG = "ReservationWorker"
     }
 }
