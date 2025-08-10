@@ -64,9 +64,22 @@ class MainActivity : AppCompatActivity() {
                 runOnUiThread {
                     isLoginProcessing = false
                     appendLog("로그인 시도 결과: $response")
-                    saveLoginData(id, password)
-                    startPeriodicCheck()
-                    Toast.makeText(this@MainActivity, "로그인 성공. 예약 조회를 시작합니다.", Toast.LENGTH_SHORT).show()
+                    if (response.contains("SUCCESS")) {
+                        saveLoginData(id, password)
+                        startPeriodicCheck()
+                        Toast.makeText(
+                            this@MainActivity,
+                            "로그인 성공. 예약 조회를 시작합니다.",
+                            Toast.LENGTH_SHORT
+                        ).show()
+                    } else {
+                        appendLog("로그인 실패: $response")
+                        Toast.makeText(
+                            this@MainActivity,
+                            "로그인 실패: $response",
+                            Toast.LENGTH_LONG
+                        ).show()
+                    }
                 }
             } catch (e: Exception) {
                 runOnUiThread {
