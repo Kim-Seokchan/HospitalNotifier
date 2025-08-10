@@ -3,6 +3,7 @@ package com.example.hospitalnotifier.network
 import android.content.Context
 import com.example.hospitalnotifier.MyCookieJar
 import com.google.gson.GsonBuilder
+import java.util.concurrent.TimeUnit
 import okhttp3.OkHttpClient
 import okhttp3.logging.HttpLoggingInterceptor
 import retrofit2.Retrofit
@@ -22,6 +23,9 @@ object ApiClient {
         return OkHttpClient.Builder()
             .cookieJar(MyCookieJar(context))
             .addInterceptor(loggingInterceptor)
+            .connectTimeout(10, TimeUnit.SECONDS)
+            .readTimeout(10, TimeUnit.SECONDS)
+            .callTimeout(20, TimeUnit.SECONDS)
     }
 
     private fun gson() = GsonBuilder().setLenient().create()
