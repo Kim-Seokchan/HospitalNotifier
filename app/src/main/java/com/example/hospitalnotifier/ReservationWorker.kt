@@ -112,7 +112,7 @@ class ReservationWorker(private val appContext: Context, workerParams: WorkerPar
         }
     }
 
-    private suspend fun startLoginProcess(id: String, password: String): Result {
+    internal suspend fun startLoginProcess(id: String, password: String): Result {
         return try {
             val loginApi = ApiClient.getLoginApi(appContext)
             loginApi.initSession()
@@ -121,7 +121,16 @@ class ReservationWorker(private val appContext: Context, workerParams: WorkerPar
                 Log.e(TAG, "로그인 실패 응답: $response")
                 Result.failure()
             } else {
-                Result.success()
+                val cookiesPref = appContext.getSharedPreferences("cookies", Context.MODE_PRIVATE)
+                val session = cookiesPref.all.entries.firstOrNull { it.key.contains("JSESSIONID1") }
+                if (session == null) {
+                    Log.e(TAG, "세션 쿠키(JSESSIONID1) 미확보")
+                    setProgress(workDataOf("status" to "세션 쿠키 없음"))
+                    Result.failure()
+                } else {
+                    Log.d(TAG, "세션 쿠키 확보: ${'$'}{session.key}=${'$'}{session.value}")
+                    Result.success()
+                }
             }
         } catch (e: Exception) {
             Log.e(TAG, "로그인 실패: ${'$'}{e.message}")

@@ -2,13 +2,20 @@ package com.example.hospitalnotifier
 
 import android.content.Context
 import androidx.test.core.app.ApplicationProvider
+import androidx.work.ListenableWorker.Result
+import androidx.work.testing.TestListenableWorkerBuilder
+import io.mockk.*
+import kotlinx.coroutines.runBlocking
 import okhttp3.OkHttpClient
 import okhttp3.Request
 import okhttp3.RequestBody.Companion.toRequestBody
 import okhttp3.mockwebserver.MockResponse
 import okhttp3.mockwebserver.MockWebServer
+import com.example.hospitalnotifier.network.ApiClient
+import com.example.hospitalnotifier.network.SnuhLoginApi
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertNotNull
+import org.junit.Assert.assertTrue
 import org.junit.Test
 import org.junit.runner.RunWith
 import org.robolectric.RobolectricTestRunner
@@ -48,5 +55,49 @@ class MyCookieJarTest {
         } finally {
             server.shutdown()
         }
+    }
+
+    @Test
+    fun `startLoginProcess fails without session cookie`() = runBlocking {
+        val context = ApplicationProvider.getApplicationContext<Context>()
+        val cookiePrefs = context.getSharedPreferences("cookies", Context.MODE_PRIVATE)
+        cookiePrefs.edit().clear().apply()
+
+        val loginApi = mockk<SnuhLoginApi>()
+        coEvery { loginApi.initSession() } returns ""
+        coEvery { loginApi.login(any(), any(), any()) } returns ""
+
+        mockkObject(ApiClient)
+        every { ApiClient.getLoginApi(any()) } returns loginApi
+
+        val worker = TestListenableWorkerBuilder<ReservationWorker>(context).build()
+        val result = worker.startLoginProcess("id", "pass")
+        assertTrue(result is Result.Failure)
+
+        unmockkAll()
+    }
+
+    @Test
+    fun `startLoginProcess succeeds with session cookie`() = runBlocking {
+        val context = ApplicationProvider.getApplicationContext<Context>()
+        val cookiePrefs = context.getSharedPreferences("cookies", Context.MODE_PRIVATE)
+        cookiePrefs.edit().clear().apply()
+
+        val loginApi = mockk<SnuhLoginApi>()
+        coEvery { loginApi.initSession() } returns ""
+        coEvery { loginApi.login(any(), any(), any()) } answers {
+            cookiePrefs.edit().putString("www.snuh.org|/|JSESSIONID1", "JSESSIONID1=test; Path=/").apply()
+            ""
+        }
+
+        mockkObject(ApiClient)
+        every { ApiClient.getLoginApi(any()) } returns loginApi
+
+        val worker = TestListenableWorkerBuilder<ReservationWorker>(context).build()
+        val result = worker.startLoginProcess("id", "pass")
+        assertTrue(result is Result.Success)
+        assertNotNull(cookiePrefs.all.keys.firstOrNull { it.contains("JSESSIONID1") })
+
+        unmockkAll()
     }
 }
