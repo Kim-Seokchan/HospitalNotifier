@@ -92,15 +92,17 @@ class ReservationWorker(private val appContext: Context, workerParams: WorkerPar
 
     private suspend fun startLoginProcess(id: String, password: String): Result {
         return try {
-            val response = ApiClient.getLoginApi(appContext).login(id, password)
-            if (response.contains("SUCCESS")) {
-                Result.success()
-            } else {
+            val loginApi = ApiClient.getLoginApi(appContext)
+            loginApi.initSession()
+            val response = loginApi.login(id, password)
+            if (response.contains("login.do")) {
                 Log.e(TAG, "로그인 실패 응답: $response")
                 Result.failure()
+            } else {
+                Result.success()
             }
         } catch (e: Exception) {
-            Log.e(TAG, "로그인 실패: ${e.message}")
+            Log.e(TAG, "로그인 실패: ${'$'}{e.message}")
             Result.retry()
         }
     }

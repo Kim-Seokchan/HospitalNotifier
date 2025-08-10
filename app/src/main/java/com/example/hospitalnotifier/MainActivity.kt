@@ -61,8 +61,10 @@ class MainActivity : AppCompatActivity() {
 
         CoroutineScope(Dispatchers.IO).launch {
             try {
-                val response = ApiClient.getLoginApi(this@MainActivity).login(id, password)
-                if (!response.contains("SUCCESS")) {
+                val loginApi = ApiClient.getLoginApi(this@MainActivity)
+                loginApi.initSession()
+                val response = loginApi.login(id, password)
+                if (response.contains("login.do")) {
                     Log.e(TAG, "로그인 실패 응답: $response")
                     runOnUiThread {
                         isLoginProcessing = false
@@ -87,11 +89,11 @@ class MainActivity : AppCompatActivity() {
                     ).show()
                 }
             } catch (e: Exception) {
-                Log.e(TAG, "로그인 실패: ${e.message}")
+                Log.e(TAG, "로그인 실패: ${'$'}{e.message}")
                 runOnUiThread {
                     isLoginProcessing = false
-                    appendLog("로그인 실패: ${e.message}")
-                    Toast.makeText(this@MainActivity, "로그인 실패: ${e.message}", Toast.LENGTH_LONG).show()
+                    appendLog("로그인 실패: ${'$'}{e.message}")
+                    Toast.makeText(this@MainActivity, "로그인 실패: ${'$'}{e.message}", Toast.LENGTH_LONG).show()
                 }
             }
         }
