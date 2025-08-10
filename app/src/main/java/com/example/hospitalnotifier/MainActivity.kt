@@ -160,19 +160,6 @@ class MainActivity : AppCompatActivity() {
     private fun startWork() {
         val intervalMinutes = binding.spinnerInterval.selectedItem as Float
         val workManager = WorkManager.getInstance(this)
-
-        workManager.cancelAllWorkByTag(WORK_TAG)
-
-        val oneTimeRequest = OneTimeWorkRequestBuilder<ReservationWorker>()
-            .addTag(WORK_TAG)
-            .build()
-
-        workManager.enqueueUniqueWork(
-            WORK_TAG,
-            ExistingWorkPolicy.REPLACE,
-            oneTimeRequest
-        )
-
         val periodicRequest = PeriodicWorkRequestBuilder<ReservationWorker>(
             intervalMinutes.toLong(), TimeUnit.MINUTES
         )
@@ -189,7 +176,7 @@ class MainActivity : AppCompatActivity() {
     }
 
     private fun stopWork() {
-        WorkManager.getInstance(this).cancelUniqueWork(WORK_TAG)
+        WorkManager.getInstance(this).cancelAllWorkByTag(WORK_TAG)
         currentWorkId = null
         observedIds.clear()
         Toast.makeText(this, "예약 조회를 중지합니다.", Toast.LENGTH_SHORT).show()
