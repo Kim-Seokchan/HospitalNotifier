@@ -60,6 +60,12 @@ class ReservationWorker(private val appContext: Context, workerParams: WorkerPar
                             }
                             attempt++
                             continue
+                        } else if (!response.isSuccessful) {
+                            val code = response.code()
+                            val errorBody = response.errorBody()?.string()
+                            Log.e(TAG, "예약 조회 실패: HTTP $code, error: $errorBody")
+                            setProgress(workDataOf("status" to "예약 조회 실패: HTTP $code"))
+                            return if (code in 500..599) Result.retry() else Result.failure()
                         }
 
                         response.body()?.scheduleList?.forEach { item ->

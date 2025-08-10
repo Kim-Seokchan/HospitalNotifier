@@ -19,3 +19,7 @@ Patch Notes(지시사항-작업내용 순)
 - 지시사항: baseClient에 네트워크 타임아웃을 설정하고 TimeUnit을 임포트할 것.
 - 작업방향 수정내용: 해당 없음.
 - 작업내용: ApiClient.kt의 baseClient에 connectTimeout 10초, readTimeout 10초, callTimeout 20초를 추가하고 java.util.concurrent.TimeUnit을 임포트함.
+
+- 지시사항: checkAvailability 응답에서 401/302 외의 비성공 HTTP 코드를 처리하고, 상태코드·에러본문을 로그와 진행상태로 전송하며, 서버 오류는 재시도, 기타는 실패로 처리할 것.
+- 작업방향 수정내용: 해당 없음.
+- 작업내용: ReservationWorker.kt에 비성공 응답 처리 분기를 추가해 HTTP 상태코드와 errorBody를 기록하고 진행상태로 전송하며, 5xx는 Result.retry(), 그 외는 Result.failure()를 반환하도록 수정.
