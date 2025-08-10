@@ -67,6 +67,8 @@ class ReservationWorker(private val appContext: Context, workerParams: WorkerPar
                         }
                         break
                     } catch (e: Exception) {
+                        Log.e(TAG, "예약 조회 실패", e)
+                        setProgress(workDataOf("status" to "예약 조회 실패: ${e.message}"))
                         if (e is HttpException && (e.code() == 401 || e.code() == 302)) {
                             Log.w(TAG, "세션 만료 예외 (HTTP ${'$'}{e.code()})")
                             val reLogin = startLoginProcess(id, password)
