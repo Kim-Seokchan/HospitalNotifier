@@ -23,8 +23,9 @@ class ReservationWorker(private val appContext: Context, workerParams: WorkerPar
         val chatId = sharedPref.getString("telegramChatId", null)
 
         return try {
-            if (!startLoginProcess(id, password)) {
-                return Result.retry()
+            when (val loginResult = startLoginProcess(id, password)) {
+                is Result.Success -> {}
+                else -> return loginResult
             }
 
             val api = ApiClient.getSnuhApi(appContext)
@@ -46,9 +47,10 @@ class ReservationWorker(private val appContext: Context, workerParams: WorkerPar
 
                         if (response.code() == 401 || response.code() == 302) {
                             Log.w(TAG, "세션 만료 감지 (HTTP ${'$'}{response.code()})")
-                            if (!startLoginProcess(id, password)) {
+                            val reLogin = startLoginProcess(id, password)
+                            if (reLogin !is Result.Success) {
                                 Log.e(TAG, "세션 재로그인 실패")
-                                return Result.retry()
+                                return reLogin
                             }
                             attempt++
                             continue
@@ -61,9 +63,10 @@ class ReservationWorker(private val appContext: Context, workerParams: WorkerPar
                     } catch (e: Exception) {
                         if (e is HttpException && (e.code() == 401 || e.code() == 302)) {
                             Log.w(TAG, "세션 만료 예외 (HTTP ${'$'}{e.code()})")
-                            if (!startLoginProcess(id, password)) {
+                            val reLogin = startLoginProcess(id, password)
+                            if (reLogin !is Result.Success) {
                                 Log.e(TAG, "세션 재로그인 실패: ${'$'}{e.message}")
-                                return Result.retry()
+                                return reLogin
                             }
                             attempt++
                         } else {
@@ -87,18 +90,18 @@ class ReservationWorker(private val appContext: Context, workerParams: WorkerPar
         }
     }
 
-    private suspend fun startLoginProcess(id: String, password: String): Boolean {
+    private suspend fun startLoginProcess(id: String, password: String): Result {
         return try {
             val response = ApiClient.getLoginApi(appContext).login(id, password)
             if (response.contains("SUCCESS")) {
-                true
+                Result.success()
             } else {
                 Log.e(TAG, "로그인 실패 응답: $response")
-                false
+                Result.failure()
             }
         } catch (e: Exception) {
-            Log.e(TAG, "로그인 실패: ${'$'}{e.message}")
-            false
+            Log.e(TAG, "로그인 실패: ${e.message}")
+            Result.retry()
         }
     }
 

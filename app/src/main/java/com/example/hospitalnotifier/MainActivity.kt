@@ -4,6 +4,7 @@ import android.content.Context
 import android.os.Bundle
 import android.widget.ArrayAdapter
 import android.widget.Toast
+import android.util.Log
 import androidx.appcompat.app.AppCompatActivity
 import androidx.core.content.edit
 import com.example.hospitalnotifier.databinding.ActivityMainBinding
@@ -61,18 +62,10 @@ class MainActivity : AppCompatActivity() {
         CoroutineScope(Dispatchers.IO).launch {
             try {
                 val response = ApiClient.getLoginApi(this@MainActivity).login(id, password)
-                runOnUiThread {
-                    isLoginProcessing = false
-                    appendLog("로그인 시도 결과: $response")
-                    if (response.contains("SUCCESS")) {
-                        saveLoginData(id, password)
-                        startPeriodicCheck()
-                        Toast.makeText(
-                            this@MainActivity,
-                            "로그인 성공. 예약 조회를 시작합니다.",
-                            Toast.LENGTH_SHORT
-                        ).show()
-                    } else {
+                if (!response.contains("SUCCESS")) {
+                    Log.e(TAG, "로그인 실패 응답: $response")
+                    runOnUiThread {
+                        isLoginProcessing = false
                         appendLog("로그인 실패: $response")
                         Toast.makeText(
                             this@MainActivity,
@@ -80,8 +73,21 @@ class MainActivity : AppCompatActivity() {
                             Toast.LENGTH_LONG
                         ).show()
                     }
+                    return@launch
+                }
+                runOnUiThread {
+                    isLoginProcessing = false
+                    appendLog("로그인 성공")
+                    saveLoginData(id, password)
+                    startPeriodicCheck()
+                    Toast.makeText(
+                        this@MainActivity,
+                        "로그인 성공. 예약 조회를 시작합니다.",
+                        Toast.LENGTH_SHORT
+                    ).show()
                 }
             } catch (e: Exception) {
+                Log.e(TAG, "로그인 실패: ${e.message}")
                 runOnUiThread {
                     isLoginProcessing = false
                     appendLog("로그인 실패: ${e.message}")
@@ -134,5 +140,9 @@ class MainActivity : AppCompatActivity() {
         val timestamp = java.text.SimpleDateFormat("HH:mm:ss", java.util.Locale.getDefault()).format(java.util.Date())
         binding.textViewLog.append("\n[$timestamp] $message")
         binding.logScrollView.post { binding.logScrollView.fullScroll(android.view.View.FOCUS_DOWN) }
+    }
+
+    companion object {
+        private const val TAG = "MainActivity"
     }
 }

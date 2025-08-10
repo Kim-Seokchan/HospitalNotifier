@@ -16,7 +16,8 @@ object ApiClient {
 
     private fun baseClient(context: Context): OkHttpClient.Builder {
         val loggingInterceptor = HttpLoggingInterceptor().apply {
-            level = HttpLoggingInterceptor.Level.BODY
+            // HEADERS level ensures we can verify Set-Cookie headers for session handling
+            level = HttpLoggingInterceptor.Level.HEADERS
         }
         return OkHttpClient.Builder()
             .cookieJar(MyCookieJar(context))
