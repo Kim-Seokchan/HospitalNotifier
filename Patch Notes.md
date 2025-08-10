@@ -31,3 +31,7 @@ Patch Notes(지시사항-작업내용 순)
 - 지시사항: 예약 조회 워커를 시작하기 전에 기존 워크를 취소하고, 중복 실행을 방지하도록 고유 워크로 등록할 것.
 - 작업방향 수정내용: 해당 없음.
 - 작업내용: MainActivity.startWork에서 cancelAllWorkByTag 후 enqueueUniqueWork와 enqueueUniquePeriodicWork를 사용하도록 수정하여 "reservationWork" 태그의 워커가 하나만 실행되도록 함.
+
+- 지시사항: LiveData에서 RUNNING 상태인 최신 WorkRequest만 추적하고 완료된 WorkInfo의 progress는 중복 기록되지 않도록 처리하며 stopWork 호출 시 관찰 상태를 초기화할 것.
+- 작업방향 수정내용: 해당 없음.
+- 작업내용: MainActivity.observeWorker에서 RUNNING 상태 WorkInfo 중 가장 최근 항목만 선택하고 완료된 WorkInfo는 집합으로 관리해 progress 중복 로그를 방지하도록 수정하고, stopWork에서 추적 ID와 집합을 초기화함.

@@ -11,6 +11,7 @@ import androidx.work.ExistingPeriodicWorkPolicy
 import androidx.work.ExistingWorkPolicy
 import androidx.work.OneTimeWorkRequestBuilder
 import androidx.work.PeriodicWorkRequestBuilder
+import androidx.work.WorkInfo
 import androidx.work.WorkManager
 import com.example.hospitalnotifier.databinding.ActivityMainBinding
 import com.example.hospitalnotifier.network.ApiClient
@@ -18,11 +19,14 @@ import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
 import java.util.concurrent.TimeUnit
+import java.util.UUID
 
 class MainActivity : AppCompatActivity() {
 
     private lateinit var binding: ActivityMainBinding
     private var isLoginProcessing = false
+    private var currentWorkId: UUID? = null
+    private val observedIds = mutableSetOf<UUID>()
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
@@ -186,6 +190,8 @@ class MainActivity : AppCompatActivity() {
 
     private fun stopWork() {
         WorkManager.getInstance(this).cancelUniqueWork(WORK_TAG)
+        currentWorkId = null
+        observedIds.clear()
         Toast.makeText(this, "예약 조회를 중지합니다.", Toast.LENGTH_SHORT).show()
         appendLog("예약 조회를 중지합니다.")
     }
@@ -194,7 +200,16 @@ class MainActivity : AppCompatActivity() {
         WorkManager.getInstance(this)
             .getWorkInfosByTagLiveData(WORK_TAG)
             .observe(this) { workInfos ->
-                workInfos.forEach { info ->
+                workInfos.filter { it.state.isFinished }
+                    .forEach { observedIds.add(it.id) }
+
+                val runningInfo = workInfos
+                    .filter { it.state == WorkInfo.State.RUNNING }
+                    .filterNot { observedIds.contains(it.id) }
+                    .lastOrNull()
+
+                runningInfo?.let { info ->
+                    currentWorkId = info.id
                     val status = info.progress.getString("status")
                     status?.let { appendLog(it) }
                 }
