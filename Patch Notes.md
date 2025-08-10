@@ -27,3 +27,7 @@ Patch Notes(지시사항-작업내용 순)
 - 지시사항: 로그인 후 세션 쿠키(JSESSIONID1) 확보 여부를 확인하고, 없으면 오류 로그·진행상태 갱신 후 실패를 반환하며, 성공 시 쿠키 이름/값을 로그로 남길 것.
 - 작업방향 수정내용: 해당 없음.
 - 작업내용: ReservationWorker.startLoginProcess에서 로그인 후 SharedPreferences의 JSESSIONID1 쿠키를 검사하는 로직을 추가하고, 미존재 시 setProgress와 함께 Result.failure()를 반환하도록 수정. 쿠키 존재 시 이름/값을 로그로 출력하며, MyCookieJarTest에 성공/실패 시나리오를 검증하는 테스트와 MockK 및 WorkManager 테스트 의존성을 추가.
+
+- 지시사항: 예약 조회 워커를 시작하기 전에 기존 워크를 취소하고, 중복 실행을 방지하도록 고유 워크로 등록할 것.
+- 작업방향 수정내용: 해당 없음.
+- 작업내용: MainActivity.startWork에서 cancelAllWorkByTag 후 enqueueUniqueWork와 enqueueUniquePeriodicWork를 사용하도록 수정하여 "reservationWork" 태그의 워커가 하나만 실행되도록 함.
