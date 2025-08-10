@@ -82,14 +82,20 @@ class ReservationWorker(private val appContext: Context, workerParams: WorkerPar
                 }
                 delay(1000)
             }
-            Log.d(TAG, "Available dates: $availableDates")
-            setProgress(workDataOf("status" to "Available dates: $availableDates"))
-            if (availableDates.isNotEmpty() && !token.isNullOrBlank() && !chatId.isNullOrBlank()) {
-                val distinctDates = availableDates.distinct().sorted()
-                val message = """🎉 예약 가능한 날짜를 찾았습니다! 🎉\n\n${distinctDates.joinToString("\n") { "- $it" }}\n\n[지금 바로 예약하기](https://www.snuh.org/reservation/reservation.do)"""
-                try {
-                    TelegramClient.api.sendMessage("bot$token", chatId, message)
-                } catch (_: Exception) {
+            if (availableDates.isEmpty()) {
+                val message = "예약 가능한 날짜가 없습니다."
+                Log.d(TAG, message)
+                setProgress(workDataOf("status" to message))
+            } else {
+                Log.d(TAG, "Available dates: $availableDates")
+                setProgress(workDataOf("status" to "Available dates: $availableDates"))
+                if (!token.isNullOrBlank() && !chatId.isNullOrBlank()) {
+                    val distinctDates = availableDates.distinct().sorted()
+                    val message = """🎉 예약 가능한 날짜를 찾았습니다! 🎉\n\n${distinctDates.joinToString("\n") { "- $it" }}\n\n[지금 바로 예약하기](https://www.snuh.org/reservation/reservation.do)"""
+                    try {
+                        TelegramClient.api.sendMessage("bot$token", chatId, message)
+                    } catch (_: Exception) {
+                    }
                 }
             }
             Result.success()
