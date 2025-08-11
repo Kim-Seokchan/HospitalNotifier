@@ -132,7 +132,6 @@ class ReservationWorker(private val appContext: Context, workerParams: WorkerPar
                     Log.e(TAG, "세션 쿠키(JSESSIONID) 미확보")
                     setProgress(workDataOf("status" to "세션 쿠키 없음"))
                     clearCookies()
-                    clearLoginInfo()
                     Result.failure()
                 } else {
                     Log.d(TAG, "세션 쿠키 확보: ${'$'}{session.key}=${'$'}{session.value}")
@@ -142,7 +141,6 @@ class ReservationWorker(private val appContext: Context, workerParams: WorkerPar
         } catch (e: Exception) {
             Log.e(TAG, "로그인 실패: ${'$'}{e.message}")
             clearCookies()
-            clearLoginInfo()
             Result.retry()
         }
     }
