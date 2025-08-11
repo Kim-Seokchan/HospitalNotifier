@@ -59,3 +59,7 @@ Patch Notes(지시사항-작업내용 순)
 - 지시사항: LiveData에서 RUNNING 뿐 아니라 FAILED, SUCCEEDED 등의 마지막 상태 WorkInfo도 확인하여 로그에 상태 메시지를 표시할 것.
 - 작업방향 수정내용: 해당 없음.
 - 작업내용: MainActivity.observeWorker에서 완료된 WorkInfo 중 관찰되지 않은 항목의 progress나 outputData에 있는 status 메시지를 출력하고 ID를 집합에 추가하도록 수정하여 즉시 실패한 작업의 마지막 메시지도 표시되도록 함.
+
+- 지시사항: 워커가 즉시 종료되는 경우에도 마지막 상태 메시지를 UI에서 확인할 수 있도록, 모든 조기 실패에서 상태를 outputData로 반환하고 성공 시에도 최종 메시지를 outputData에 포함할 것.
+- 작업방향 수정내용: 해당 없음.
+- 작업내용: ReservationWorker.kt에서 ID·비밀번호·조회 월 누락, 로그인 실패, 세션 쿠키 없음, 예약 조회 실패 등의 모든 Result.failure에 workDataOf("status" ...)를 제공하고, 조회 성공 시 마지막 메시지를 담은 Result.success(workDataOf("status" ...))를 반환하도록 변경.
