@@ -21,16 +21,19 @@ class ReservationWorker(private val appContext: Context, workerParams: WorkerPar
 
         val sharedPref = appContext.getSharedPreferences("settings", Context.MODE_PRIVATE)
         val id = sharedPref.getString("id", null) ?: run {
-            setProgress(workDataOf("status" to "ID 없음"))
-            return Result.failure()
+            val message = "ID 없음"
+            setProgress(workDataOf("status" to message))
+            return Result.failure(workDataOf("status" to message))
         }
         val password = sharedPref.getString("password", null) ?: run {
-            setProgress(workDataOf("status" to "비밀번호 없음"))
-            return Result.failure()
+            val message = "비밀번호 없음"
+            setProgress(workDataOf("status" to message))
+            return Result.failure(workDataOf("status" to message))
         }
         val targetMonths = sharedPref.getString("targetMonths", null) ?: run {
-            setProgress(workDataOf("status" to "조회 월 없음"))
-            return Result.failure()
+            val message = "조회 월 없음"
+            setProgress(workDataOf("status" to message))
+            return Result.failure(workDataOf("status" to message))
         }
         val token = sharedPref.getString("telegramToken", null)
         val chatId = sharedPref.getString("telegramChatId", null)
@@ -75,8 +78,9 @@ class ReservationWorker(private val appContext: Context, workerParams: WorkerPar
                             val code = response.code()
                             val errorBody = response.errorBody()?.string()
                             Log.e(TAG, "예약 조회 실패: HTTP $code, error: $errorBody")
-                            setProgress(workDataOf("status" to "예약 조회 실패: HTTP $code"))
-                            return if (code in 500..599) Result.retry() else Result.failure()
+                            val msg = "예약 조회 실패: HTTP $code"
+                            setProgress(workDataOf("status" to msg))
+                            return if (code in 500..599) Result.retry() else Result.failure(workDataOf("status" to msg))
                         }
 
                         response.body()?.scheduleList?.forEach { item ->
@@ -102,23 +106,22 @@ class ReservationWorker(private val appContext: Context, workerParams: WorkerPar
                 }
                 delay(1000)
             }
-            if (availableDates.isEmpty()) {
-                val message = "예약 가능한 날짜가 없습니다."
-                Log.d(TAG, message)
-                setProgress(workDataOf("status" to message))
+            val finalMessage = if (availableDates.isEmpty()) {
+                "예약 가능한 날짜가 없습니다."
             } else {
-                Log.d(TAG, "Available dates: $availableDates")
-                setProgress(workDataOf("status" to "Available dates: $availableDates"))
-                if (!token.isNullOrBlank() && !chatId.isNullOrBlank()) {
-                    val distinctDates = availableDates.distinct().sorted()
-                    val message = """🎉 예약 가능한 날짜를 찾았습니다! 🎉\n\n${distinctDates.joinToString("\n") { "- $it" }}\n\n[지금 바로 예약하기](https://www.snuh.org/reservation/reservation.do)"""
-                    try {
-                        TelegramClient.api.sendMessage("bot$token", chatId, message)
-                    } catch (_: Exception) {
-                    }
+                "Available dates: $availableDates"
+            }
+            Log.d(TAG, finalMessage)
+            setProgress(workDataOf("status" to finalMessage))
+            if (availableDates.isNotEmpty() && !token.isNullOrBlank() && !chatId.isNullOrBlank()) {
+                val distinctDates = availableDates.distinct().sorted()
+                val message = """🎉 예약 가능한 날짜를 찾았습니다! 🎉\n\n${distinctDates.joinToString("\n") { "- $it" }}\n\n[지금 바로 예약하기](https://www.snuh.org/reservation/reservation.do)"""
+                try {
+                    TelegramClient.api.sendMessage("bot$token", chatId, message)
+                } catch (_: Exception) {
                 }
             }
-            Result.success()
+            Result.success(workDataOf("status" to finalMessage))
         } catch (_: Exception) {
             Result.retry()
         }
@@ -131,18 +134,20 @@ class ReservationWorker(private val appContext: Context, workerParams: WorkerPar
             val response = loginApi.login(id, password)
             if (response.contains("login.do")) {
                 Log.e(TAG, "로그인 실패 응답: $response")
-                setProgress(workDataOf("status" to "로그인 실패: login.do 응답"))
+                val message = "로그인 실패: login.do 응답"
+                setProgress(workDataOf("status" to message))
                 clearCookies()
                 clearLoginInfo()
-                Result.failure()
+                Result.failure(workDataOf("status" to message))
             } else {
                 val cookiesPref = appContext.getSharedPreferences("cookies", Context.MODE_PRIVATE)
                 val session = cookiesPref.all.entries.firstOrNull { it.key.contains("JSESSIONID") }
                 if (session == null) {
                     Log.e(TAG, "세션 쿠키(JSESSIONID) 미확보")
-                    setProgress(workDataOf("status" to "세션 쿠키 없음"))
+                    val message = "세션 쿠키 없음"
+                    setProgress(workDataOf("status" to message))
                     clearCookies()
-                    Result.failure()
+                    Result.failure(workDataOf("status" to message))
                 } else {
                     Log.d(TAG, "세션 쿠키 확보: ${'$'}{session.key}=${'$'}{session.value}")
                     Result.success()
