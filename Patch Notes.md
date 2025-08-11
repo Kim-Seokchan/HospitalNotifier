@@ -47,3 +47,7 @@ Patch Notes(지시사항-작업내용 순)
 - 지시사항: startLoginProcess에서 세션 쿠키 검색을 JSESSIONID 접두사 전체로 일반화하고, 쿠키를 찾지 못한 경우에만 실패로 처리할 것.
 - 작업방향 수정내용: 해당 없음.
 - 작업내용: ReservationWorker.kt에서 JSESSIONID1 대신 JSESSIONID 접두사를 검색하도록 수정하고, MyCookieJarTest.kt의 성공 시나리오에서 JSESSIONID2 쿠키로 검증하도록 변경.
+
+- 지시사항: startLoginProcess에서 clearLoginInfo() 호출을 제거하거나 조건부로 실행하고, 실패해도 settings에 저장된 ID/비밀번호가 유지되도록 할 것.
+- 작업방향 수정내용: 해당 없음.
+- 작업내용: ReservationWorker.kt에서 세션 쿠키 미확보나 로그인 예외 시 clearLoginInfo() 호출을 제거해 로그인 정보를 유지하고, 사용자 입력이 잘못된 경우에만 clearLoginInfo()가 실행되도록 수정함.
