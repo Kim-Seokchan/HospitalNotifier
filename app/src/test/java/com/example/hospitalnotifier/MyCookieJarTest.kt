@@ -91,7 +91,7 @@ class MyCookieJarTest {
         val loginApi = mockk<SnuhLoginApi>()
         coEvery { loginApi.initSession() } returns ""
         coEvery { loginApi.login(any(), any(), any()) } answers {
-            cookiePrefs.edit().putString("www.snuh.org|/|JSESSIONID1", "JSESSIONID1=test; Path=/").apply()
+            cookiePrefs.edit().putString("www.snuh.org|/|JSESSIONID2", "JSESSIONID2=test; Path=/").apply()
             ""
         }
 
@@ -101,7 +101,7 @@ class MyCookieJarTest {
         val worker = TestListenableWorkerBuilder<ReservationWorker>(context).build()
         val result = worker.startLoginProcess("id", "pass")
         assertTrue(result is Result.Success)
-        assertNotNull(cookiePrefs.all.keys.firstOrNull { it.contains("JSESSIONID1") })
+        assertNotNull(cookiePrefs.all.keys.firstOrNull { it.contains("JSESSIONID2") })
 
         unmockkAll()
     }
