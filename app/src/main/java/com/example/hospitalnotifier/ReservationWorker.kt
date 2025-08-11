@@ -20,9 +20,18 @@ class ReservationWorker(private val appContext: Context, workerParams: WorkerPar
         setProgress(workDataOf("status" to "Worker started"))
 
         val sharedPref = appContext.getSharedPreferences("settings", Context.MODE_PRIVATE)
-        val id = sharedPref.getString("id", null) ?: return Result.failure()
-        val password = sharedPref.getString("password", null) ?: return Result.failure()
-        val targetMonths = sharedPref.getString("targetMonths", null) ?: return Result.failure()
+        val id = sharedPref.getString("id", null) ?: run {
+            setProgress(workDataOf("status" to "ID 없음"))
+            return Result.failure()
+        }
+        val password = sharedPref.getString("password", null) ?: run {
+            setProgress(workDataOf("status" to "비밀번호 없음"))
+            return Result.failure()
+        }
+        val targetMonths = sharedPref.getString("targetMonths", null) ?: run {
+            setProgress(workDataOf("status" to "조회 월 없음"))
+            return Result.failure()
+        }
         val token = sharedPref.getString("telegramToken", null)
         val chatId = sharedPref.getString("telegramChatId", null)
 
@@ -122,6 +131,7 @@ class ReservationWorker(private val appContext: Context, workerParams: WorkerPar
             val response = loginApi.login(id, password)
             if (response.contains("login.do")) {
                 Log.e(TAG, "로그인 실패 응답: $response")
+                setProgress(workDataOf("status" to "로그인 실패: login.do 응답"))
                 clearCookies()
                 clearLoginInfo()
                 Result.failure()
@@ -140,6 +150,7 @@ class ReservationWorker(private val appContext: Context, workerParams: WorkerPar
             }
         } catch (e: Exception) {
             Log.e(TAG, "로그인 실패: ${'$'}{e.message}")
+            setProgress(workDataOf("status" to "로그인 실패: ${'$'}{e.message}"))
             clearCookies()
             Result.retry()
         }
