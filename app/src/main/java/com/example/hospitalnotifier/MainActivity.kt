@@ -187,8 +187,15 @@ class MainActivity : AppCompatActivity() {
         WorkManager.getInstance(this)
             .getWorkInfosByTagLiveData(WORK_TAG)
             .observe(this) { workInfos ->
-                workInfos.filter { it.state.isFinished }
-                    .forEach { observedIds.add(it.id) }
+                workInfos
+                    .filter { it.state.isFinished }
+                    .filterNot { observedIds.contains(it.id) }
+                    .forEach { info ->
+                        val status = info.outputData.getString("status")
+                            ?: info.progress.getString("status")
+                        status?.let { appendLog(it) }
+                        observedIds.add(info.id)
+                    }
 
                 val runningInfo = workInfos
                     .filter { it.state == WorkInfo.State.RUNNING }

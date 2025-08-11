@@ -55,3 +55,7 @@ Patch Notes(지시사항-작업내용 순)
 - 지시사항: doWork에서 ID, 비밀번호, 조회 월이 없을 때 각각 진행상태에 원인을 기록하고 실패를 반환하며, startLoginProcess에서 로그인 실패(response에 login.do 포함 또는 예외 발생) 시에도 "로그인 실패:" 메시지를 진행상태에 기록할 것.
 - 작업방향 수정내용: 해당 없음.
 - 작업내용: ReservationWorker.kt에서 각 null 항목에 대한 setProgress와 실패 처리를 추가하고, 로그인 실패 상황에서도 setProgress로 원인을 전달하도록 수정함.
+
+- 지시사항: LiveData에서 RUNNING 뿐 아니라 FAILED, SUCCEEDED 등의 마지막 상태 WorkInfo도 확인하여 로그에 상태 메시지를 표시할 것.
+- 작업방향 수정내용: 해당 없음.
+- 작업내용: MainActivity.observeWorker에서 완료된 WorkInfo 중 관찰되지 않은 항목의 progress나 outputData에 있는 status 메시지를 출력하고 ID를 집합에 추가하도록 수정하여 즉시 실패한 작업의 마지막 메시지도 표시되도록 함.
