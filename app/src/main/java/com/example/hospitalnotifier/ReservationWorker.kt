@@ -137,7 +137,6 @@ class ReservationWorker(private val appContext: Context, workerParams: WorkerPar
                 val message = "로그인 실패: login.do 응답"
                 setProgress(workDataOf("status" to message))
                 clearCookies()
-                clearLoginInfo()
                 Result.failure(workDataOf("status" to message))
             } else {
                 val cookiesPref = appContext.getSharedPreferences("cookies", Context.MODE_PRIVATE)
