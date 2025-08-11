@@ -67,3 +67,7 @@ Patch Notes(지시사항-작업내용 순)
 - 지시사항: startLoginProcess에서 clearLoginInfo() 호출을 제거하거나 조건부로 실행하고, 실패해도 settings에 저장된 ID/비밀번호가 유지되도록 할 것.
 - 작업방향 수정내용: 해당 없음.
 - 작업내용: ReservationWorker.kt에서 로그인 실패 시 clearLoginInfo() 호출을 삭제해 SharedPreferences에 ID/비밀번호가 남아 다음 예약 조회 주기에 재로그인을 시도할 수 있도록 수정함.
+
+- 지시사항: 로그인 후 cookiesPref.all에서 JSESSIONID를 포함하고 비어 있지 않은 쿠키가 하나 이상 있는지 확인하고, 없으면 "세션 쿠키 없음" 상태를 전송 후 실패를 반환할 것.
+- 작업방향 수정내용: 해당 없음.
+- 작업내용: ReservationWorker.kt의 startLoginProcess에서 JSESSIONID가 포함된 값이 비어 있지 않은 쿠키를 검사하도록 변경하고, 존재하지 않을 경우 setProgress("세션 쿠키 없음")과 함께 Result.failure(workDataOf("status" to "세션 쿠키 없음"))을 반환하여 check_snuh.py와 같이 쿠키 확보 실패 시 처리를 중단하도록 함.
