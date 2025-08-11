@@ -51,3 +51,7 @@ Patch Notes(지시사항-작업내용 순)
 - 지시사항: startLoginProcess에서 clearLoginInfo() 호출을 제거하거나 조건부로 실행하고, 실패해도 settings에 저장된 ID/비밀번호가 유지되도록 할 것.
 - 작업방향 수정내용: 해당 없음.
 - 작업내용: ReservationWorker.kt에서 세션 쿠키 미확보나 로그인 예외 시 clearLoginInfo() 호출을 제거해 로그인 정보를 유지하고, 사용자 입력이 잘못된 경우에만 clearLoginInfo()가 실행되도록 수정함.
+
+- 지시사항: doWork에서 ID, 비밀번호, 조회 월이 없을 때 각각 진행상태에 원인을 기록하고 실패를 반환하며, startLoginProcess에서 로그인 실패(response에 login.do 포함 또는 예외 발생) 시에도 "로그인 실패:" 메시지를 진행상태에 기록할 것.
+- 작업방향 수정내용: 해당 없음.
+- 작업내용: ReservationWorker.kt에서 각 null 항목에 대한 setProgress와 실패 처리를 추가하고, 로그인 실패 상황에서도 setProgress로 원인을 전달하도록 수정함.
