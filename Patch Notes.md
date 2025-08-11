@@ -43,3 +43,7 @@ Patch Notes(지시사항-작업내용 순)
 - 지시사항: MainActivity.startWork에서 즉시 실행이 필요하지 않으면 원타임 WorkRequest를 제거하고 주기 작업만 사용하며, stopWork에서 현재 실행 중인 작업을 cancelAllWorkByTag(WORK_TAG)로 중단할 것.
 - 작업방향 수정내용: 해당 없음.
 - 작업내용: MainActivity.kt의 startWork를 enqueueUniquePeriodicWork만 사용하도록 정리하고, stopWork에서 cancelAllWorkByTag를 호출하여 실행 중인 작업을 즉시 취소하도록 변경.
+
+- 지시사항: startLoginProcess에서 세션 쿠키 검색을 JSESSIONID 접두사 전체로 일반화하고, 쿠키를 찾지 못한 경우에만 실패로 처리할 것.
+- 작업방향 수정내용: 해당 없음.
+- 작업내용: ReservationWorker.kt에서 JSESSIONID1 대신 JSESSIONID 접두사를 검색하도록 수정하고, MyCookieJarTest.kt의 성공 시나리오에서 JSESSIONID2 쿠키로 검증하도록 변경.

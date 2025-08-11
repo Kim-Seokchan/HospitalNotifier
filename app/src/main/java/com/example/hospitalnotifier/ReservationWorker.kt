@@ -127,9 +127,9 @@ class ReservationWorker(private val appContext: Context, workerParams: WorkerPar
                 Result.failure()
             } else {
                 val cookiesPref = appContext.getSharedPreferences("cookies", Context.MODE_PRIVATE)
-                val session = cookiesPref.all.entries.firstOrNull { it.key.contains("JSESSIONID1") }
+                val session = cookiesPref.all.entries.firstOrNull { it.key.contains("JSESSIONID") }
                 if (session == null) {
-                    Log.e(TAG, "세션 쿠키(JSESSIONID1) 미확보")
+                    Log.e(TAG, "세션 쿠키(JSESSIONID) 미확보")
                     setProgress(workDataOf("status" to "세션 쿠키 없음"))
                     clearCookies()
                     clearLoginInfo()
