@@ -15,64 +15,52 @@ object ApiClient {
     private const val USER_AGENT =
         "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/108.0.0.0 Safari/537.36"
 
-    private fun baseClient(context: Context): OkHttpClient.Builder {
+    private lateinit var okHttpClient: OkHttpClient
+    private lateinit var snuhApi: SnuhApi
+    private lateinit var loginApi: SnuhLoginApi
+
+    fun init(context: Context) {
         val loggingInterceptor = HttpLoggingInterceptor().apply {
-            // HEADERS level ensures we can verify Set-Cookie headers for session handling
-            level = HttpLoggingInterceptor.Level.HEADERS
+            level = HttpLoggingInterceptor.Level.BODY
         }
-        return OkHttpClient.Builder()
+
+        okHttpClient = OkHttpClient.Builder()
             .cookieJar(MyCookieJar(context))
             .addInterceptor(loggingInterceptor)
             .connectTimeout(10, TimeUnit.SECONDS)
             .readTimeout(10, TimeUnit.SECONDS)
             .callTimeout(20, TimeUnit.SECONDS)
-    }
-
-    private fun gson() = GsonBuilder().setLenient().create()
-
-    fun getSnuhApi(context: Context): SnuhApi {
-        val okHttpClient = baseClient(context)
-            .addInterceptor { chain ->
-                val original = chain.request()
-                val requestBuilder = original.newBuilder()
-                    .header("Referer", "https://www.snuh.org/reservation/reservation.do")
-                    .header("User-Agent", USER_AGENT)
-                    .header("X-Requested-With", "XMLHttpRequest")
-                val request = requestBuilder.build()
-                chain.proceed(request)
-            }
             .build()
 
         val retrofit = Retrofit.Builder()
             .baseUrl(BASE_URL)
             .client(okHttpClient)
             .addConverterFactory(ScalarsConverterFactory.create())
-            .addConverterFactory(GsonConverterFactory.create(gson()))
+            .addConverterFactory(GsonConverterFactory.create(GsonBuilder().setLenient().create()))
             .build()
 
-        return retrofit.create(SnuhApi::class.java)
+        snuhApi = retrofit.create(SnuhApi::class.java)
+        loginApi = retrofit.create(SnuhLoginApi::class.java)
     }
 
-    fun getLoginApi(context: Context): SnuhLoginApi {
-        val okHttpClient = baseClient(context)
-            .addInterceptor { chain ->
-                val original = chain.request()
-                val requestBuilder = original.newBuilder()
-                    .header("Referer", "https://www.snuh.org/login.do")
-                    .header("User-Agent", USER_AGENT)
-                    .header("X-Requested-With", "XMLHttpRequest")
-                val request = requestBuilder.build()
-                chain.proceed(request)
-            }
-            .build()
+    fun getSnuhApi(): SnuhApi {
+        if (!::snuhApi.isInitialized) {
+            throw IllegalStateException("ApiClient must be initialized")
+        }
+        return snuhApi
+    }
 
-        val retrofit = Retrofit.Builder()
-            .baseUrl(BASE_URL)
-            .client(okHttpClient)
-            .addConverterFactory(ScalarsConverterFactory.create())
-            .addConverterFactory(GsonConverterFactory.create(gson()))
-            .build()
+    fun getLoginApi(): SnuhLoginApi {
+        if (!::loginApi.isInitialized) {
+            throw IllegalStateException("ApiClient must be initialized")
+        }
+        return loginApi
+    }
 
-        return retrofit.create(SnuhLoginApi::class.java)
+    fun getOkHttpClient(): OkHttpClient {
+        if (!::okHttpClient.isInitialized) {
+            throw IllegalStateException("ApiClient must be initialized")
+        }
+        return okHttpClient
     }
 }

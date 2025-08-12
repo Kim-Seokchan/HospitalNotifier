@@ -20,6 +20,8 @@ import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
 import java.util.concurrent.TimeUnit
 import java.util.UUID
+import androidx.work.workDataOf
+import androidx.work.Data
 
 class MainActivity : AppCompatActivity() {
 
@@ -51,73 +53,29 @@ class MainActivity : AppCompatActivity() {
     }
 
     private fun startLoginProcess() {
-        if (isLoginProcessing) {
-            Toast.makeText(this, "이미 로그인이 진행 중입니다.", Toast.LENGTH_SHORT).show()
-            return
-        }
         val id = binding.editTextId.text.toString()
         val password = binding.editTextPassword.text.toString()
         if (id.isBlank() || password.isBlank()) {
             Toast.makeText(this, "ID와 비밀번호를 입력해주세요.", Toast.LENGTH_SHORT).show()
             return
         }
-        isLoginProcessing = true
-        appendLog("로그인 시도 중...")
 
-        CoroutineScope(Dispatchers.IO).launch {
-            try {
-                val loginApi = ApiClient.getLoginApi(this@MainActivity)
-                loginApi.initSession()
-                val response = loginApi.login(id, password)
-                if (response.contains("login.do")) {
-                    Log.e(TAG, "로그인 실패 응답: $response")
-                    runOnUiThread {
-                        isLoginProcessing = false
-                        appendLog("로그인 실패: $response")
-                        Toast.makeText(
-                            this@MainActivity,
-                            "로그인 실패: $response",
-                            Toast.LENGTH_LONG
-                        ).show()
-                    }
-                    return@launch
-                }
-                runOnUiThread {
-                    isLoginProcessing = false
-                    appendLog("로그인 성공")
-                    if (saveLoginData(id, password)) {
-                        startWork()
-                        Toast.makeText(
-                            this@MainActivity,
-                            "로그인 성공. 예약 조회를 시작합니다.",
-                            Toast.LENGTH_SHORT
-                        ).show()
-                    } else {
-                        Toast.makeText(
-                            this@MainActivity,
-                            "로그인 성공. 그러나 조회할 월 입력을 확인하세요.",
-                            Toast.LENGTH_LONG
-                        ).show()
-                    }
-                }
-            } catch (e: Exception) {
-                Log.e(TAG, "로그인 실패: ${'$'}{e.message}")
-                runOnUiThread {
-                    isLoginProcessing = false
-                    appendLog("로그인 실패: ${'$'}{e.message}")
-                    Toast.makeText(this@MainActivity, "로그인 실패: ${'$'}{e.message}", Toast.LENGTH_LONG).show()
-                }
-            }
+        val loginData = saveLoginData(id, password)
+        if (loginData != null) {
+            startWork(loginData)
+            Toast.makeText(this, "예약 조회를 시작합니다.", Toast.LENGTH_SHORT).show()
+        } else {
+            Toast.makeText(this, "조회할 월 입력을 확인하세요.", Toast.LENGTH_LONG).show()
         }
     }
 
-    private fun saveLoginData(id: String, password: String): Boolean {
+    private fun saveLoginData(id: String, password: String): Bundle? {
         val rawMonths = binding.editTextTargetMonths.text.toString()
         val months = rawMonths.split(",").map { it.trim() }.filter { it.isNotEmpty() }
         if (months.isEmpty()) {
             Toast.makeText(this, "조회할 년-월을 입력해주세요.", Toast.LENGTH_SHORT).show()
             appendLog("targetMonths 입력 없음")
-            return false
+            return null
         }
 
         val normalizedMonths = mutableListOf<String>()
@@ -132,12 +90,12 @@ class MainActivity : AppCompatActivity() {
                 } else {
                     Toast.makeText(this, "${m} 은(는) 올바른 월이 아닙니다.", Toast.LENGTH_LONG).show()
                     appendLog("잘못된 월 입력: $m")
-                    return false
+                    return null
                 }
             } else {
                 Toast.makeText(this, "${m} 은(는) YYYY-MM 형식이 아닙니다.", Toast.LENGTH_LONG).show()
                 appendLog("잘못된 월 입력: $m")
-                return false
+                return null
             }
         }
 
@@ -154,33 +112,67 @@ class MainActivity : AppCompatActivity() {
             putString("telegramChatId", telegramChatId)
         }
         appendLog("ID와 비밀번호를 포함한 로그인 정보를 저장했습니다.")
-        return true
+        return Bundle().apply {
+            putString("id", id)
+            putString("password", password)
+            putString("targetMonths", normalizedMonths.joinToString(","))
+        }
     }
 
-    private fun startWork() {
-        val intervalMinutes = binding.spinnerInterval.selectedItem as Float
+    private fun startWork(loginData: Bundle) {
         val workManager = WorkManager.getInstance(this)
-        val periodicRequest = PeriodicWorkRequestBuilder<ReservationWorker>(
-            intervalMinutes.toLong(), TimeUnit.MINUTES
-        )
+
+        val dataMap = loginData.keySet().associateWith { key ->
+            loginData.get(key)
+        }
+
+        val inputData = Data.Builder()
+            .putAll(dataMap)
+            .build()
+
+        val workRequest = OneTimeWorkRequestBuilder<ReservationWorker>()
+            .setInputData(inputData)
             .addTag(WORK_TAG)
             .build()
 
-        workManager.enqueueUniquePeriodicWork(
+        workManager.enqueueUniqueWork(
             WORK_TAG,
-            ExistingPeriodicWorkPolicy.REPLACE,
-            periodicRequest
+            ExistingWorkPolicy.REPLACE,
+            workRequest
         )
 
-        appendLog("예약 조회를 시작합니다.")
+        appendLog("단일 예약 조회를 시작합니다.")
     }
 
     private fun stopWork() {
+        // WorkManager 작업 취소
         WorkManager.getInstance(this).cancelAllWorkByTag(WORK_TAG)
+
+        // SharedPreferences 데이터 삭제
+        val sharedPref = getSharedPreferences("settings", Context.MODE_PRIVATE)
+        sharedPref.edit().clear().apply()
+
+        // 쿠키 삭제
+        val cookieJar = ApiClient.getOkHttpClient().cookieJar
+        if (cookieJar is MyCookieJar) {
+            cookieJar.clear()
+        }
+
+        // UI 초기화
+        binding.editTextId.text.clear()
+        binding.editTextPassword.text.clear()
+        binding.editTextTargetMonths.text.clear()
+        binding.editTextTelegramToken.text.clear()
+        binding.editTextTelegramChatId.text.clear()
+        binding.spinnerInterval.setSelection(0)
+        binding.textViewLog.text = ""
+
+        // 내부 상태 초기화
         currentWorkId = null
         observedIds.clear()
-        Toast.makeText(this, "예약 조회를 중지합니다.", Toast.LENGTH_SHORT).show()
-        appendLog("예약 조회를 중지합니다.")
+
+        Toast.makeText(this, "모든 작업과 데이터를 초기화했습니다.", Toast.LENGTH_SHORT).show()
+        appendLog("중지 버튼 클릭: 모든 작업과 데이터를 초기화했습니다.")
     }
 
     private fun observeWorker() {

@@ -3,6 +3,8 @@ package com.example.hospitalnotifier
 import android.app.Application
 import androidx.work.Configuration
 
+import com.example.hospitalnotifier.network.ApiClient
+
 class App : Application(), Configuration.Provider {
 
     companion object {
@@ -13,6 +15,7 @@ class App : Application(), Configuration.Provider {
     override fun onCreate() {
         super.onCreate()
         instance = this
+        ApiClient.init(this)
     }
 
     override val workManagerConfiguration: Configuration

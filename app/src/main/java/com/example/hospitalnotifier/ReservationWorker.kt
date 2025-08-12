@@ -40,12 +40,12 @@ class ReservationWorker(private val appContext: Context, workerParams: WorkerPar
 
         return try {
             clearCookies()
-            when (val loginResult = startLoginProcess(id, password)) {
-                is Result.Success -> {}
-                else -> return loginResult
+            val loginResult = startLoginProcess(id, password)
+            if (loginResult !is Result.Success) {
+                return loginResult
             }
 
-            val api = ApiClient.getSnuhApi(appContext)
+            val api = ApiClient.getSnuhApi()
             val months = targetMonths.split(",").map { it.trim() }
             val availableDates = mutableListOf<String>()
             for (month in months) {
@@ -65,7 +65,7 @@ class ReservationWorker(private val appContext: Context, workerParams: WorkerPar
                         )
 
                         if (response.code() == 401 || response.code() == 302) {
-                            Log.w(TAG, "세션 만료 감지 (HTTP ${'$'}{response.code()})")
+                            Log.w(TAG, "세션 만료 감지 (HTTP ${response.code()})")
                             clearCookies()
                             val reLogin = startLoginProcess(id, password)
                             if (reLogin !is Result.Success) {
@@ -83,19 +83,31 @@ class ReservationWorker(private val appContext: Context, workerParams: WorkerPar
                             return if (code in 500..599) Result.retry() else Result.failure(workDataOf("status" to msg))
                         }
 
+                        val requestedYear = parts[0].toInt()
+                        val requestedMonth = parts[1].toInt()
+
                         response.body()?.scheduleList?.forEach { item ->
-                            item.meddate?.let { availableDates.add(it) }
+                            item.meddate?.let { dateString ->
+                                // dateString is "YYYYMMDD"
+                                if (dateString.length == 8) {
+                                    val year = dateString.substring(0, 4).toInt()
+                                    val monthOfYear = dateString.substring(4, 6).toInt()
+                                    if (year == requestedYear && monthOfYear == requestedMonth) {
+                                        availableDates.add(dateString)
+                                    }
+                                }
+                            }
                         }
                         break
                     } catch (e: Exception) {
                         Log.e(TAG, "예약 조회 실패", e)
                         setProgress(workDataOf("status" to "예약 조회 실패: ${e.message}"))
                         if (e is HttpException && (e.code() == 401 || e.code() == 302)) {
-                            Log.w(TAG, "세션 만료 예외 (HTTP ${'$'}{e.code()})")
+                            Log.w(TAG, "세션 만료 예외 (HTTP ${e.code()})")
                             clearCookies()
                             val reLogin = startLoginProcess(id, password)
                             if (reLogin !is Result.Success) {
-                                Log.e(TAG, "세션 재로그인 실패: ${'$'}{e.message}")
+                                Log.e(TAG, "세션 재로그인 실패: ${e.message}")
                                 return reLogin
                             }
                             attempt++
@@ -106,21 +118,49 @@ class ReservationWorker(private val appContext: Context, workerParams: WorkerPar
                 }
                 delay(1000)
             }
-            val finalMessage = if (availableDates.isEmpty()) {
+            var finalMessage = if (availableDates.isEmpty()) {
                 "예약 가능한 날짜가 없습니다."
             } else {
-                "Available dates: $availableDates"
+                "Available dates: ${availableDates.joinToString()}"
             }
-            Log.d(TAG, finalMessage)
-            setProgress(workDataOf("status" to finalMessage))
-            if (availableDates.isNotEmpty() && !token.isNullOrBlank() && !chatId.isNullOrBlank()) {
-                val distinctDates = availableDates.distinct().sorted()
-                val message = """🎉 예약 가능한 날짜를 찾았습니다! 🎉\n\n${distinctDates.joinToString("\n") { "- $it" }}\n\n[지금 바로 예약하기](https://www.snuh.org/reservation/reservation.do)"""
-                try {
-                    TelegramClient.api.sendMessage("bot$token", chatId, message)
-                } catch (_: Exception) {
+
+            if (availableDates.isNotEmpty()) {
+                if (token.isNullOrBlank() || chatId.isNullOrBlank()) {
+                    val telegramWarning = "텔레그램 토큰/Chat ID가 없어 메시지를 보내지 않습니다."
+                    Log.w(TAG, telegramWarning)
+                    finalMessage += "\n$telegramWarning"
+                } else {
+                    val distinctDates = availableDates.distinct().sorted()
+                    val formattedDates = distinctDates.joinToString("\n") { dateString ->
+                        // Format YYYYMMDD to YYYY-MM-DD
+                        "- ${dateString.substring(0, 4)}-${dateString.substring(4, 6)}-${dateString.substring(6, 8)}"
+                    }
+                    val message = """🎉 예약 가능한 날짜를 찾았습니다! 🎉
+
+${formattedDates}
+
+[지금 바로 예약하기](https://www.snuh.org/reservation/reservation.do)"""
+                    Log.d(TAG, "텔레그램 메시지 전송 시도...")
+                    Log.d(TAG, "Token: ${token.take(5)}... Chat ID: ${chatId}")
+                    try {
+                        // Retrofit @Path에서 이미 "bot" 접두사를 처리하므로 여기서는 실제 토큰만 전달합니다.
+                        val response = TelegramClient.api.sendMessage(token, chatId, message)
+                        if (response.isSuccessful) {
+                            val telegramSuccessMessage = "텔레그램 메시지를 성공적으로 보냈습니다."
+                            Log.d(TAG, telegramSuccessMessage)
+                            finalMessage += "\n$telegramSuccessMessage"
+                        } else {
+                            val errorBody = response.errorBody()?.string()
+                            Log.e(TAG, "텔레그램 메시지 전송 실패: ${response.code()}, $errorBody")
+                            setProgress(workDataOf("status" to "텔레그램 메시지 전송 실패: ${response.code()}"))
+                        }
+                    } catch (e: Exception) {
+                        Log.e(TAG, "텔레그램 메시지 전송 중 예외 발생", e)
+                        setProgress(workDataOf("status" to "텔레그램 메시지 전송 실패: ${e.message}"))
+                    }
                 }
             }
+
             Result.success(workDataOf("status" to finalMessage))
         } catch (_: Exception) {
             Result.retry()
@@ -129,7 +169,7 @@ class ReservationWorker(private val appContext: Context, workerParams: WorkerPar
 
     internal suspend fun startLoginProcess(id: String, password: String): Result {
         return try {
-            val loginApi = ApiClient.getLoginApi(appContext)
+            val loginApi = ApiClient.getLoginApi()
             loginApi.initSession()
             val response = loginApi.login(id, password)
             if (response.contains("login.do")) {
@@ -139,10 +179,10 @@ class ReservationWorker(private val appContext: Context, workerParams: WorkerPar
                 clearCookies()
                 Result.failure(workDataOf("status" to message))
             } else {
-                val cookiesPref = appContext.getSharedPreferences("cookies", Context.MODE_PRIVATE)
-                val session = cookiesPref.all.entries.firstOrNull { entry ->
-                    entry.key.contains("JSESSIONID") && (entry.value as? String)?.isNotBlank() == true
-                }
+                val cookieJar = ApiClient.getOkHttpClient().cookieJar as MyCookieJar
+                val cookies = cookieJar.getCookies("https://www.snuh.org/")
+                val session = cookies.firstOrNull { it.name.startsWith("JSESSIONID") }
+
                 if (session == null) {
                     Log.e(TAG, "세션 쿠키(JSESSIONID) 미확보")
                     val message = "세션 쿠키 없음"
@@ -150,23 +190,21 @@ class ReservationWorker(private val appContext: Context, workerParams: WorkerPar
                     clearCookies()
                     Result.failure(workDataOf("status" to message))
                 } else {
-                    Log.d(TAG, "세션 쿠키 확보: ${'$'}{session.key}=${'$'}{session.value}")
+                    Log.d(TAG, "세션 쿠키 확보: ${session.name}=${session.value}")
                     Result.success()
                 }
             }
         } catch (e: Exception) {
-            Log.e(TAG, "로그인 실패: ${'$'}{e.message}")
-            setProgress(workDataOf("status" to "로그인 실패: ${'$'}{e.message}"))
+            Log.e(TAG, "로그인 실패: ${e.message}")
+            setProgress(workDataOf("status" to "로그인 실패: ${e.message}"))
             clearCookies()
             Result.retry()
         }
     }
 
     private fun clearCookies() {
-        appContext.getSharedPreferences("cookies", Context.MODE_PRIVATE)
-            .edit()
-            .clear()
-            .apply()
+        val cookieJar = ApiClient.getOkHttpClient().cookieJar as MyCookieJar
+        cookieJar.clear()
     }
 
     private fun clearLoginInfo() {
