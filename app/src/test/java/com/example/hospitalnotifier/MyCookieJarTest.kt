@@ -25,8 +25,6 @@ class MyCookieJarTest {
     @Test
     fun `loginProc sets JSESSIONID1`() {
         val context = ApplicationProvider.getApplicationContext<Context>()
-        val prefs = context.getSharedPreferences("cookies", Context.MODE_PRIVATE)
-        prefs.edit().clear().apply()
 
         val server = MockWebServer()
         server.enqueue(
@@ -50,8 +48,8 @@ class MyCookieJarTest {
             val response = client.newCall(request).execute()
             assertEquals(200, response.code)
 
-            val key = "${server.hostName}|/|JSESSIONID1"
-            assertNotNull(prefs.getString(key, null))
+            val cookies = cookieJar.getCookies(server.url("/").toString())
+            assertTrue(cookies.any { it.name == "JSESSIONID1" })
         } finally {
             server.shutdown()
         }
