@@ -119,3 +119,24 @@ Patch Notes(지시사항-작업내용 순, 신규사항은 기존의 아래 쪽�
 - 지시사항: 텔레그램 정보가 없어 메세지를 보내지 않았다는 로그 처럼, 텔레그램 전송을 했다는 로그도 출력하도록 하시오.
 - 작업방향 수정내용: 해당 없음.
 - 작업내용: ReservationWorker.kt에서 텔레그램 메시지가 성공적으로 전송되면 확인 메시지가 finalMessage에 추가됩니다. 성공 메시지에 대한 별도의 setProgress 호출은 최종 작업자 상태 업데이트에 의해 덮어쓰이는 것을 방지하기 위해 제거되었습니다. 이렇게 하면 "텔레그램 메시지 전송됨" 확인이 UI 로그에 안정적으로 표시됩니다.
+
+- 지시사항: 조회 주기를 최소 15분이 아니라 1분 단위까지 가능하도록 하려한다. workmanager api가 15분 주기가 최소라던데 수정이 가능한가? 다른방식은 없을까?
+- 작업방향 수정내용: WorkManager의 15분 최소 주기 제약을 우회하기 위해 ForegroundService를 사용하는 방식으로 변경.
+- 작업내용:
+  - WorkManager 기반의 ReservationWorker를 제거하고, ForegroundService 기반의 ReservationService를 새로 구현하여 1분 단위의 주기적인 작업 실행이 가능하도록 수정.
+  - MainActivity에서 WorkManager 관련 코드를 제거하고 ReservationService를 시작/중지하고 서비스로부터 로그를 수신하여 UI에 표시하도록 변경.
+  - AndroidManifest.xml에 FOREGROUND_SERVICE 권한을 추가하고 ReservationService를 등록.
+  - 조회 주기 선택 UI에 1, 5, 10분 옵션을 추가.
+
+## 2025-08-12
+
+**작업 지시사항:**
+- 포그라운드 서비스로 전환 후 발생하는 앱 충돌 및 알림 미표시 문제 해결
+
+**작업 방향 수정:**
+- (해당 없음)
+
+**작업 내용:**
+- **버그 수정:** 
+    - `AndroidManifest.xml`의 `ReservationService`에 `android:foregroundServiceType="dataSync"` 속성을 추가하여 Android 14 이상에서 발생하는 `MissingForegroundServiceTypeException` 오류를 해결했습니다.
+    - Android 13 이상에서 포그라운드 서비스 알림이 표시되지 않는 문제를 해결하기 위해 `POST_NOTIFICATIONS` 권한을 요청하는 로직을 추가했습니다. `AndroidManifest.xml`에 권한을 선언하고, `MainActivity`에서 앱 시작 시 사용자에게 권한을 요청하도록 수정했습니다.
