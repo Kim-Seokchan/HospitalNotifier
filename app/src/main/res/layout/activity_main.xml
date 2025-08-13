@@ -76,7 +76,8 @@
         android:layout_height="wrap_content"
         android:layout_marginTop="16dp"
         android:hint="@string/telegram_token_hint"
-        android:inputType="text"
+        android:inputType="textPassword"
+        android:autofillHints="password"
         app:layout_constraintTop_toBottomOf="@id/spinnerInterval"
         app:layout_constraintStart_toStartOf="parent"
         app:layout_constraintEnd_toEndOf="parent" />
@@ -88,6 +89,7 @@
         android:layout_marginTop="8dp"
         android:hint="@string/telegram_chat_id_hint"
         android:inputType="text"
+        android:autofillHints="username"
         app:layout_constraintTop_toBottomOf="@id/editTextTelegramToken"
         app:layout_constraintStart_toStartOf="parent"
         app:layout_constraintEnd_toEndOf="parent" />

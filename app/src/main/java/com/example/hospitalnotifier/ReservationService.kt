@@ -12,6 +12,7 @@ import android.os.IBinder
 import android.os.Looper
 import android.util.Log
 import androidx.core.app.NotificationCompat
+import androidx.core.content.edit
 import androidx.localbroadcastmanager.content.LocalBroadcastManager
 import com.example.hospitalnotifier.network.ApiClient
 import com.example.hospitalnotifier.network.ScheduleResponse
@@ -39,9 +40,20 @@ class ReservationService : Service() {
 
     override fun onBind(intent: Intent?): IBinder? = null
 
+    override fun onCreate() {
+        super.onCreate()
+        createNotificationChannels()
+    }
+
     override fun onStartCommand(intent: Intent?, flags: Int, startId: Int): Int {
+        if (intent?.action == ACTION_STOP_SERVICE) {
+            log("알림에서 종료 버튼 클릭.")
+            cleanUpAndStopService()
+            return START_NOT_STICKY
+        }
+
         intervalMinutes = intent?.getLongExtra("interval", 15L) ?: 15L
-        startForeground(NOTIFICATION_ID, createNotification("예약 조회 서비스 시작 중..."))
+        startForeground(NOTIFICATION_ID, createOngoingNotification("예약 조회 서비스 시작 중..."))
 
         log("서비스가 시작되었습니다. 조회 주기: $intervalMinutes 분")
         changeState(State.LOGGING_IN)
@@ -51,8 +63,15 @@ class ReservationService : Service() {
 
     override fun onDestroy() {
         super.onDestroy()
-        handler.removeCallbacksAndMessages(null) // 모든 예약된 작업을 취소
+        handler.removeCallbacksAndMessages(null)
         log("서비스가 중지되었습니다.")
+    }
+
+    private fun cleanUpAndStopService() {
+        val sharedPref = getSharedPreferences("settings", Context.MODE_PRIVATE)
+        sharedPref.edit { clear() }
+        clearCookies()
+        stopSelf()
     }
 
     private fun changeState(newState: State) {
@@ -101,7 +120,7 @@ class ReservationService : Service() {
 
     private suspend fun performCheck() {
         log("예약 가능 여부를 확인합니다...")
-        updateNotification("예약 가능 여부를 확인 중입니다...")
+        updateOngoingNotification("예약 가능 여부를 확인 중입니다...")
 
         val sharedPref = getSharedPreferences("settings", Context.MODE_PRIVATE)
         val id = sharedPref.getString("id", null)
@@ -155,7 +174,7 @@ class ReservationService : Service() {
                 }
             } catch (e: Exception) {
                 log("예약 조회 중 오류 발생: ${e.message}")
-                sessionExpired = true // 네트워크 오류도 세션 만료로 간주하고 재로그인 시도
+                sessionExpired = true
                 break
             }
         }
@@ -167,7 +186,7 @@ class ReservationService : Service() {
             val formattedDates = availableDates.distinct().joinToString { formatDate(it) }
             val message = "🎉 예약 가능한 날짜를 찾았습니다: $formattedDates"
             log(message)
-            updateNotification("예약 가능! 앱에서 확인하세요.")
+            sendSuccessNotification(message)
 
             val token = sharedPref.getString("telegramToken", null)
             val chatId = sharedPref.getString("telegramChatId", null)
@@ -180,7 +199,7 @@ class ReservationService : Service() {
             stopSelf()
         } else {
             log("예약 가능한 날짜가 없습니다. $intervalMinutes 분 후에 다시 확인합니다.")
-            updateNotification("$intervalMinutes 분 후에 다시 확인합니다.")
+            updateOngoingNotification("$intervalMinutes 분 후에 다시 확인합니다.")
             handler.postDelayed({ changeState(State.CHECKING) }, TimeUnit.MINUTES.toMillis(intervalMinutes))
         }
     }
@@ -210,7 +229,7 @@ class ReservationService : Service() {
 
     private fun waitForRetry() {
         log("15분 후 재로그인을 다시 시도합니다.")
-        updateNotification("재로그인 실패. 15분 후 다시 시도합니다.")
+        updateOngoingNotification("재로그인 실패. 15분 후 다시 시도합니다.")
         handler.postDelayed({ changeState(State.RE_LOGGING_IN) }, TimeUnit.MINUTES.toMillis(15))
     }
 
@@ -259,33 +278,62 @@ class ReservationService : Service() {
         }
     }
 
-    private fun createNotification(contentText: String): android.app.Notification {
-        val notificationChannelId = "RESERVATION_SERVICE_CHANNEL"
+    private fun createNotificationChannels() {
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
-            val channel = NotificationChannel(
-                notificationChannelId,
-                "Reservation Service",
-                NotificationManager.IMPORTANCE_DEFAULT
+            val ongoingChannel = NotificationChannel(
+                ONGOING_CHANNEL_ID,
+                "서비스 실행 상태",
+                NotificationManager.IMPORTANCE_LOW // 소리 및 팝업 없음
+            )
+            val successChannel = NotificationChannel(
+                SUCCESS_CHANNEL_ID,
+                "예약 성공 알림",
+                NotificationManager.IMPORTANCE_HIGH // 소리 및 팝업 있음
             )
             val manager = getSystemService(Context.NOTIFICATION_SERVICE) as NotificationManager
-            manager.createNotificationChannel(channel)
+            manager.createNotificationChannel(ongoingChannel)
+            manager.createNotificationChannel(successChannel)
         }
+    }
 
+    private fun createOngoingNotification(contentText: String): android.app.Notification {
         val intent = Intent(this, MainActivity::class.java)
         val pendingIntent = PendingIntent.getActivity(this, 0, intent, PendingIntent.FLAG_IMMUTABLE)
 
-        return NotificationCompat.Builder(this, notificationChannelId)
+        val stopSelf = Intent(this, ReservationService::class.java)
+        stopSelf.action = ACTION_STOP_SERVICE
+        val pStopSelf = PendingIntent.getService(this, 0, stopSelf, PendingIntent.FLAG_CANCEL_CURRENT or PendingIntent.FLAG_IMMUTABLE)
+
+        return NotificationCompat.Builder(this, ONGOING_CHANNEL_ID)
             .setContentTitle("서울대병원 예약 알리미")
             .setContentText(contentText)
             .setSmallIcon(R.mipmap.ic_launcher)
             .setContentIntent(pendingIntent)
+            .setOngoing(true)
+            .addAction(android.R.drawable.ic_menu_close_clear_cancel, "종료", pStopSelf)
             .build()
     }
 
-    private fun updateNotification(contentText: String) {
-        val notification = createNotification(contentText)
+    private fun updateOngoingNotification(contentText: String) {
+        val notification = createOngoingNotification(contentText)
         val manager = getSystemService(Context.NOTIFICATION_SERVICE) as NotificationManager
         manager.notify(NOTIFICATION_ID, notification)
+    }
+
+    private fun sendSuccessNotification(contentText: String) {
+        val intent = Intent(this, MainActivity::class.java)
+        val pendingIntent = PendingIntent.getActivity(this, 0, intent, PendingIntent.FLAG_IMMUTABLE)
+
+        val notification = NotificationCompat.Builder(this, SUCCESS_CHANNEL_ID)
+            .setContentTitle("🎉 예약 가능! 🎉")
+            .setContentText(contentText)
+            .setSmallIcon(R.mipmap.ic_launcher)
+            .setContentIntent(pendingIntent)
+            .setAutoCancel(true) // 사용자가 탭하면 사라짐
+            .build()
+
+        val manager = getSystemService(Context.NOTIFICATION_SERVICE) as NotificationManager
+        manager.notify(SUCCESS_NOTIFICATION_ID, notification)
     }
 
     private fun log(message: String) {
@@ -297,5 +345,9 @@ class ReservationService : Service() {
     companion object {
         private const val TAG = "ReservationService"
         private const val NOTIFICATION_ID = 1
+        private const val SUCCESS_NOTIFICATION_ID = 2
+        const val ACTION_STOP_SERVICE = "ACTION_STOP_SERVICE"
+        const val ONGOING_CHANNEL_ID = "RESERVATION_SERVICE_CHANNEL"
+        const val SUCCESS_CHANNEL_ID = "RESERVATION_SUCCESS_CHANNEL"
     }
 }

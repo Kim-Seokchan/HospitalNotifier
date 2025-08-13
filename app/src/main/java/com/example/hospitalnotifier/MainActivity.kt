@@ -38,12 +38,29 @@ class MainActivity : AppCompatActivity() {
 
         setupSpinner()
         setupClickListeners()
+        loadAndRestoreUiState() // UI 상태 복원 함수 호출
         LocalBroadcastManager.getInstance(this).registerReceiver(logReceiver, IntentFilter("log-message"))
     }
 
     override fun onDestroy() {
         super.onDestroy()
         LocalBroadcastManager.getInstance(this).unregisterReceiver(logReceiver)
+    }
+
+    private fun loadAndRestoreUiState() {
+        val sharedPref = getSharedPreferences("settings", Context.MODE_PRIVATE)
+        binding.editTextId.setText(sharedPref.getString("id", ""))
+        binding.editTextPassword.setText(sharedPref.getString("password", ""))
+        binding.editTextTargetMonths.setText(sharedPref.getString("targetMonths", ""))
+        binding.editTextTelegramToken.setText(sharedPref.getString("telegramToken", ""))
+        binding.editTextTelegramChatId.setText(sharedPref.getString("telegramChatId", ""))
+
+        val intervals = arrayOf(1f, 5f, 10f, 15f, 30f, 60f)
+        val savedInterval = sharedPref.getFloat("interval", 15f)
+        val spinnerPosition = intervals.indexOf(savedInterval)
+        if (spinnerPosition >= 0) {
+            binding.spinnerInterval.setSelection(spinnerPosition)
+        }
     }
 
     private fun setupSpinner() {
